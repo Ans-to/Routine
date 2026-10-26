@@ -7,7 +7,7 @@ import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
 /**
- * Application entry point wiring Hilt dependency injection and WorkManager configuration.
+ * Application entry point for Routine configuring Hilt-injected WorkManager tasks.
  */
 @HiltAndroidApp
 class RoutineApplication :

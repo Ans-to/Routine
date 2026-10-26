@@ -2,4 +2,15 @@
 <resources>
     <string name="app_name">Routine</string>
     <string name="app_tagline">Automations for people who don\'t want to learn Tasker.</string>
+    <string name="channel_alerts_name">Routine Safety Alerts</string>
+    <string name="circuit_breaker_title">Rule auto-disabled: %1$s</string>
+    <string name="circuit_breaker_body">Disabled after 5 consecutive failures (%1$s).</string>
+    <string name="debug_harness_title">Standard Rule Verification Harness</string>
+    <string name="debug_add_toast_rule">Add Charger Toast Rule</string>
+    <string name="debug_add_ringer_rule">Add Vibrate Rule</string>
+    <string name="debug_fire_now">Fire Live</string>
+    <string name="debug_dry_run">Dry Run</string>
+    <string name="debug_active_rules_heading">Configured Rules (%1$d)</string>
+    <string name="debug_logs_heading">Encrypted Execution Logs (%1$d)</string>
+    <string name="debug_no_logs">No rule executions recorded yet.</string>
 </resources>

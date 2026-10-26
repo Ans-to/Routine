@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Optional deterministic foreground-app detector for Routine rules (such as locking screen rotation when opening video apps). Never reads screen text or performs UI taps.</string>
+</resources>
