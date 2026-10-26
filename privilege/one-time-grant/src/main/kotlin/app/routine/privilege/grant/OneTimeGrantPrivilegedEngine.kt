@@ -286,29 +286,37 @@ internal object QrVersion4Encoder {
 
     private fun placeCodewords(m: Array<BooleanArray>, r: Array<BooleanArray>, codewords: IntArray) {
         var bitIdx = 0
-        val totalBits = codewords.size * 8
         var right = SIZE - 1
         var upward = true
         while (right >= 1) {
             if (right == 6) right -= 1
             val rows = if (upward) (SIZE - 1 downTo 0) else (0 until SIZE)
             for (y in rows) {
-                for (dx in 0..1) {
-                    val x = right - dx
-                    if (!r[y][x]) {
-                        val dark = if (bitIdx < totalBits) {
-                            ((codewords[bitIdx / 8] ushr (7 - (bitIdx % 8))) and 1) != 0
-                        } else {
-                            false
-                        }
-                        m[y][x] = dark
-                        bitIdx++
-                    }
-                }
+                bitIdx = placeColumnPairCell(m, r, codewords, y, right, bitIdx)
             }
             upward = !upward
             right -= 2
         }
+    }
+
+    private fun placeColumnPairCell(
+        m: Array<BooleanArray>,
+        r: Array<BooleanArray>,
+        codewords: IntArray,
+        y: Int,
+        right: Int,
+        startBitIdx: Int,
+    ): Int {
+        var bitIdx = startBitIdx
+        val totalBits = codewords.size * 8
+        for (dx in 0..1) {
+            val x = right - dx
+            if (!r[y][x]) {
+                m[y][x] = bitIdx < totalBits && ((codewords[bitIdx / 8] ushr (7 - (bitIdx % 8))) and 1) != 0
+                bitIdx++
+            }
+        }
+        return bitIdx
     }
 
     private fun applyMaskZero(m: Array<BooleanArray>, r: Array<BooleanArray>) {

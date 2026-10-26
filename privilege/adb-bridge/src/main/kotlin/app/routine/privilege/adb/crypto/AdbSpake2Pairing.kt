@@ -192,28 +192,12 @@ internal object Ed25519Math {
     }
 
     fun computeBoringSslPasswordScalar(sha512Digest: ByteArray): ByteArray {
-        var pw = BigInteger(1, sha512Digest.reversedArray()).mod(GROUP_ORDER_L)
-        if (pw.and(BigInteger.valueOf(7)) != BigInteger.ZERO) {
-            var k = 1
-            while (k <= 4) {
-                val candidate = pw.add(GROUP_ORDER_L.multiply(BigInteger.valueOf(k.toLong())))
-                if (candidate.and(BigInteger.valueOf(7)) == BigInteger.ZERO) {
-                    pw = candidate
-                    break
-                }
-                k += 1
-            }
-            if (pw.and(BigInteger.valueOf(7)) != BigInteger.ZERO) {
-                for (mult in 1..7) {
-                    val candidate = pw.add(GROUP_ORDER_L.multiply(BigInteger.valueOf(mult.toLong())))
-                    if (candidate.and(BigInteger.valueOf(7)) == BigInteger.ZERO) {
-                        pw = candidate
-                        break
-                    }
-                }
-            }
-        }
-        return toLittleEndian32(pw)
+        val base = BigInteger(1, sha512Digest.reversedArray()).mod(GROUP_ORDER_L)
+        val cofactorMask = BigInteger.valueOf(7)
+        val cleared = (0L..7L)
+            .map { mult -> base.add(GROUP_ORDER_L.multiply(BigInteger.valueOf(mult))) }
+            .first { candidate -> candidate.and(cofactorMask) == BigInteger.ZERO }
+        return toLittleEndian32(cleared)
     }
 
     fun toLittleEndian32(value: BigInteger): ByteArray {

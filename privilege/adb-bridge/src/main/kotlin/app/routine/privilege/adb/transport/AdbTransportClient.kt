@@ -160,45 +160,7 @@ class AdbTransportClient(private val keyManager: AdbRsaKeyManager) {
         Socket().use { tcpSocket ->
             tcpSocket.connect(InetSocketAddress(address, port), timeoutMs)
             tcpSocket.soTimeout = timeoutMs
-            var input: InputStream = tcpSocket.inputStream
-            var output: OutputStream = tcpSocket.outputStream
-
-            AdbPacket(
-                command = AdbPacket.CMD_CNXN,
-                arg0 = AdbPacket.ADB_VERSION,
-                arg1 = AdbPacket.MAX_PAYLOAD,
-                payload = "host::features=shell_v2,cmd\u0000".encodeToByteArray(),
-            ).writeTo(output)
-
-            var sentSignature = false
-            while (true) {
-                val pkt = AdbPacket.readFrom(input)
-                when (pkt.command) {
-                    AdbPacket.CMD_CNXN -> break
-                    AdbPacket.CMD_STLS -> {
-                        AdbPacket(AdbPacket.CMD_STLS, AdbPacket.STLS_VERSION, 0).writeTo(output)
-                        val ssl = buildAdbSslContext().socketFactory
-                            .createSocket(tcpSocket, host, port, false) as SSLSocket
-                        ssl.enabledProtocols = arrayOf("TLSv1.3", "TLSv1.2")
-                        ssl.startHandshake()
-                        input = ssl.inputStream
-                        output = ssl.outputStream
-                    }
-                    AdbPacket.CMD_AUTH -> {
-                        require(pkt.arg0 == AdbPacket.AUTH_TYPE_TOKEN) { "Unexpected AUTH subtype ${pkt.arg0}" }
-                        if (!sentSignature) {
-                            sentSignature = true
-                            val sig = keyManager.signAuthToken(pkt.payload)
-                            AdbPacket(AdbPacket.CMD_AUTH, AdbPacket.AUTH_TYPE_SIGNATURE, 0, sig).writeTo(output)
-                        } else {
-                            val pub = keyManager.buildAdbPublicKeyPayload()
-                            AdbPacket(AdbPacket.CMD_AUTH, AdbPacket.AUTH_TYPE_RSAPUBLICKEY, 0, pub).writeTo(output)
-                        }
-                    }
-                    else -> error("Unexpected packet during ADB handshake: 0x${pkt.command.toString(16)}")
-                }
-            }
-
+            val (input, output) = negotiateAdbSession(tcpSocket, host, port)
             val localStreamId = 1
             AdbPacket(
                 command = AdbPacket.CMD_OPEN,
@@ -206,27 +168,77 @@ class AdbTransportClient(private val keyManager: AdbRsaKeyManager) {
                 arg1 = 0,
                 payload = "shell:$command\u0000".encodeToByteArray(),
             ).writeTo(output)
-
-            val outBuffer = ByteArrayOutputStream()
-            var remoteStreamId = 0
-            while (true) {
-                val frame = AdbPacket.readFrom(input)
-                when (frame.command) {
-                    AdbPacket.CMD_OKAY -> remoteStreamId = frame.arg0
-                    AdbPacket.CMD_WRTE -> {
-                        remoteStreamId = frame.arg0
-                        outBuffer.write(frame.payload)
-                        AdbPacket(AdbPacket.CMD_OKAY, localStreamId, remoteStreamId).writeTo(output)
-                    }
-                    AdbPacket.CMD_CLSE -> {
-                        AdbPacket(AdbPacket.CMD_CLSE, localStreamId, remoteStreamId).writeTo(output)
-                        break
-                    }
-                    else -> break
-                }
-            }
-            return outBuffer.toByteArray().decodeToString()
+            return readShellStream(input, output, localStreamId)
         }
+    }
+
+    private fun negotiateAdbSession(tcpSocket: Socket, host: String, port: Int): Pair<InputStream, OutputStream> {
+        var input: InputStream = tcpSocket.inputStream
+        var output: OutputStream = tcpSocket.outputStream
+        AdbPacket(
+            command = AdbPacket.CMD_CNXN,
+            arg0 = AdbPacket.ADB_VERSION,
+            arg1 = AdbPacket.MAX_PAYLOAD,
+            payload = "host::features=shell_v2,cmd\u0000".encodeToByteArray(),
+        ).writeTo(output)
+
+        var sentSignature = false
+        var connected = false
+        while (!connected) {
+            val pkt = AdbPacket.readFrom(input)
+            when (pkt.command) {
+                AdbPacket.CMD_CNXN -> connected = true
+                AdbPacket.CMD_STLS -> {
+                    AdbPacket(AdbPacket.CMD_STLS, AdbPacket.STLS_VERSION, 0).writeTo(output)
+                    val ssl = buildAdbSslContext().socketFactory
+                        .createSocket(tcpSocket, host, port, false) as SSLSocket
+                    ssl.enabledProtocols = arrayOf("TLSv1.3", "TLSv1.2")
+                    ssl.startHandshake()
+                    input = ssl.inputStream
+                    output = ssl.outputStream
+                }
+                AdbPacket.CMD_AUTH -> {
+                    sendAuthResponse(pkt, sentSignature, output)
+                    sentSignature = true
+                }
+                else -> error("Unexpected packet during ADB handshake: 0x${pkt.command.toString(16)}")
+            }
+        }
+        return input to output
+    }
+
+    private fun sendAuthResponse(pkt: AdbPacket, sentSignature: Boolean, output: OutputStream) {
+        require(pkt.arg0 == AdbPacket.AUTH_TYPE_TOKEN) { "Unexpected AUTH subtype ${pkt.arg0}" }
+        if (!sentSignature) {
+            val sig = keyManager.signAuthToken(pkt.payload)
+            AdbPacket(AdbPacket.CMD_AUTH, AdbPacket.AUTH_TYPE_SIGNATURE, 0, sig).writeTo(output)
+        } else {
+            val pub = keyManager.buildAdbPublicKeyPayload()
+            AdbPacket(AdbPacket.CMD_AUTH, AdbPacket.AUTH_TYPE_RSAPUBLICKEY, 0, pub).writeTo(output)
+        }
+    }
+
+    private fun readShellStream(input: InputStream, output: OutputStream, localStreamId: Int): String {
+        val outBuffer = ByteArrayOutputStream()
+        var remoteStreamId = 0
+        var open = true
+        while (open) {
+            val frame = AdbPacket.readFrom(input)
+            when (frame.command) {
+                AdbPacket.CMD_OKAY -> remoteStreamId = frame.arg0
+                AdbPacket.CMD_WRTE -> {
+                    remoteStreamId = frame.arg0
+                    outBuffer.write(frame.payload)
+                    AdbPacket(AdbPacket.CMD_OKAY, localStreamId, remoteStreamId).writeTo(output)
+                }
+                AdbPacket.CMD_CLSE -> {
+                    AdbPacket(AdbPacket.CMD_CLSE, localStreamId, remoteStreamId).writeTo(output)
+                    open = false
+                }
+                else -> open = false
+            }
+        }
+        return outBuffer.toByteArray().decodeToString()
     }
 
     @Suppress("CustomX509TrustManager")
