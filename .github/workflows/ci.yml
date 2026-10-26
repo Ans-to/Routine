@@ -166,6 +166,8 @@ jobs:
           sudo chmod 666 /dev/kvm
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           cleanup() {
             timeout 5 adb emu kill >/dev/null 2>&1 || true
@@ -178,7 +180,10 @@ jobs:
             tail -n 10 /tmp/sdk.log | while IFS= read -r l; do echo "::error title=sdkmanager::$l"; done
             exit 1
           fi
-          echo "no" | "$AVDMANAGER" create avd -n routine_smoke -k "system-images;android-34;google_apis;x86_64" --device "pixel_6" --force >/dev/null
+          if ! echo "no" | "$AVDMANAGER" create avd -n routine_smoke -k "system-images;android-34;google_apis;x86_64" --force >/tmp/avd.log 2>&1; then
+            tail -n 10 /tmp/avd.log | while IFS= read -r l; do echo "::error title=avdmanager::$l"; done
+            exit 1
+          fi
           adb start-server >/dev/null 2>&1 || true
           "$ANDROID_HOME/emulator/emulator" -avd routine_smoke -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim </dev/null >/tmp/emulator.log 2>&1 &
           EMU_PID=$!
