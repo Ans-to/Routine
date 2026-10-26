@@ -114,6 +114,7 @@ class WirelessAdbDiscovery @Inject constructor(
         val workerJob = launch(Dispatchers.IO) {
             for (candidate in resolveQueue) {
                 val resolved = resolveWithRetry(nsdManager, candidate) ?: continue
+
                 @Suppress("DEPRECATION")
                 val localHost = selectDeviceLocalHost(resolved.host) ?: continue
                 if (resolved.port > 0) {
@@ -132,12 +133,15 @@ class WirelessAdbDiscovery @Inject constructor(
             override fun onDiscoveryStarted(regType: String) = Unit
             override fun onDiscoveryStopped(serviceType: String) = Unit
             override fun onServiceLost(serviceInfo: NsdServiceInfo) = Unit
+
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                 close()
             }
+
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
                 close()
             }
+
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                 resolveQueue.trySend(serviceInfo)
             }

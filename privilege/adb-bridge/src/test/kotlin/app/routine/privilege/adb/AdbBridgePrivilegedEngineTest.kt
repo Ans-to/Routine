@@ -40,6 +40,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.ConscryptMode
 
 @RunWith(RobolectricTestRunner::class)
 class AdbBridgePrivilegedEngineTest {
@@ -88,14 +89,9 @@ class AdbBridgePrivilegedEngineTest {
     }
 
     @Test
+    @ConscryptMode(ConscryptMode.Mode.OFF)
     fun `AdbTransportClient pairs over real TLSv1_3 socket and executes STLS mutual TLS shell command`() {
-        // Robolectric registers BouncyCastle at slot 1 on JVM without Conscrypt, which conflicts with SunJSSE TLSv1.3
-        // RSASSA-PSS signing when keys are generated under BC. Temporarily restore pure JDK providers for SunJSSE.
-        val robolectricBc = if (Security.getProvider("AndroidOpenSSL") == null) {
-            Security.getProvider("BC")?.also { Security.removeProvider("BC") }
-        } else {
-            null
-        }
+        val robolectricBc = Security.getProvider("BC")?.also { Security.removeProvider("BC") }
         try {
             val clientKeys = AdbRsaKeyManager(File(context.cacheDir, "test_client_${System.nanoTime()}"))
             val serverKeys = AdbRsaKeyManager(File(context.cacheDir, "test_server_${System.nanoTime()}"))
@@ -231,7 +227,7 @@ class AdbBridgePrivilegedEngineTest {
             }
         } finally {
             if (robolectricBc != null && Security.getProvider("BC") == null) {
-                Security.insertProviderAt(robolectricBc, 1)
+                Security.addProvider(robolectricBc)
             }
         }
     }
