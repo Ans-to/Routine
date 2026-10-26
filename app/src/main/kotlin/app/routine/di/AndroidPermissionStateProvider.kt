@@ -62,10 +62,12 @@ class AndroidPermissionStateProvider @Inject constructor(
             }
         }
         val secureGranted = SystemPermission.WRITE_SECURE_SETTINGS in granted
+        val accessibilityEnabled = SystemPermission.ACCESSIBILITY_SERVICE in granted
         return PermissionSnapshot(
             grantedPermissions = granted,
-            isOneTimeAdbGranted = secureGranted,
-            isAdbBridgeAvailable = false,
+            isAdbBridgeReady = false,
+            isOneTimeGrantReady = secureGranted,
+            isAccessibilityEnabled = accessibilityEnabled,
         )
     }
 
