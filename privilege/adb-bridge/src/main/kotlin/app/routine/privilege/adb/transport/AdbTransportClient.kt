@@ -256,7 +256,8 @@ class AdbTransportClient(
                     AdbPacket(AdbPacket.CMD_OKAY, localStreamId, remoteStreamId).writeTo(output)
                 }
                 AdbPacket.CMD_CLSE -> {
-                    AdbPacket(AdbPacket.CMD_CLSE, localStreamId, remoteStreamId).writeTo(output)
+                    runCatching { AdbPacket(AdbPacket.CMD_CLSE, localStreamId, remoteStreamId).writeTo(output) }
+                        .onFailure { err -> android.util.Log.d(TAG, "Peer closed stream after CLSE", err) }
                     open = false
                 }
                 else -> open = false
@@ -387,15 +388,16 @@ class AdbTransportClient(
                 ?: error("Conscrypt exportKeyingMaterial returned null.")
         }
 
-        fun resolveVerifiedLocalAddress(host: String): InetAddress =
-            resolveCandidateLocalAddresses(host).first()
+        fun resolveVerifiedLocalAddress(host: String): InetAddress = resolveCandidateLocalAddresses(host).first()
 
         fun resolveCandidateLocalAddresses(host: String): List<InetAddress> {
             val cleanHost = host.substringBefore('%').ifBlank { "127.0.0.1" }
             val requested = InetAddress.getByName(cleanHost)
+            if (requested.isLoopbackAddress) {
+                return listOf(InetAddress.getByName("127.0.0.1"))
+            }
             val localAddresses = enumerateLocalInterfaceAddresses()
-            val matchesLocalInterface = requested.isLoopbackAddress ||
-                localAddresses.any { local -> local.address.contentEquals(requested.address) }
+            val matchesLocalInterface = localAddresses.any { local -> local.address.contentEquals(requested.address) }
             require(matchesLocalInterface) {
                 "Security policy violation: ADB Bridge refuses non-device-local address $host."
             }

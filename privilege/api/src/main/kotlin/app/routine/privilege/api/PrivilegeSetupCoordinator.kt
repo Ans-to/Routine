@@ -93,8 +93,7 @@ interface PrivilegeSetupCoordinator {
      * Failure modes: Never throws; defaults to an idle [MutableStateFlow] when unimplemented in tests.
      * Thread safety: Hot [StateFlow]; completely thread-safe across all dispatchers.
      */
-    fun observeWirelessPairingStatus(): StateFlow<WirelessPairingStatus> =
-        MutableStateFlow(WirelessPairingStatus())
+    fun observeWirelessPairingStatus(): StateFlow<WirelessPairingStatus> = MutableStateFlow(WirelessPairingStatus())
 
     /**
      * Starts the foreground Wireless Debugging scan service so discovery continues while Android Settings is open,
