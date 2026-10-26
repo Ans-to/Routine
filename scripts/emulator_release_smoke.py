@@ -140,6 +140,12 @@ def main() -> None:
 
     # 4. Verify My Rules screen shows "Active Rules (1)" and "Run Now"
     wait_and_tap("Active Rules (1)", timeout_s=20.0, tap=False)
+    # Open Settings tab on offline APK and verify zero NsdService SecurityException crashes
+    wait_and_tap("Settings", timeout_s=15.0, tap=True)
+    time.sleep(2.0)
+    assert_no_app_crash("Settings screen in offline flavor")
+    wait_and_tap("Rules", timeout_s=15.0, tap=True)
+    time.sleep(1.5)
     wait_and_tap("Run Now", timeout_s=15.0, tap=True)
     time.sleep(2.5)
     assert_no_app_crash("Run Now execution")

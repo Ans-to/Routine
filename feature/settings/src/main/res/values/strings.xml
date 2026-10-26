@@ -15,6 +15,7 @@
 
     <string name="settings_opt_a_title">Option A — Built-in Wireless Debugging Bridge (No PC)</string>
     <string name="settings_opt_a_steps">1. Open Developer Options and enable Wireless Debugging.\n2. Tap Scan for Pairing Port below, then open Pair device with pairing code.\n3. Enter the 6-digit code in Routine\'s notification or below.</string>
+    <string name="settings_opt_a_offline_notice">You have the strict zero-INTERNET Offline APK installed. Android requires INTERNET permission for local 127.0.0.1 Wireless Debugging &amp; mDNS discovery — install Routine-v0.1.0-alpha-wirelessAdb.apk for on-device Option A pairing, or use Option B (One-Time ADB Grant) above.</string>
     <string name="settings_open_dev_options">Open Developer Options</string>
     <string name="settings_scan_ports_start">Scan for Pairing Port</string>
     <string name="settings_scan_ports_stop">Stop Port Scan</string>

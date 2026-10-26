@@ -1,6 +1,7 @@
 package app.routine.di
 
 import android.content.Context
+import app.routine.BuildConfig
 import app.routine.privilege.adb.AdbBridgePrivilegedEngine
 import app.routine.privilege.adb.discovery.PairingNotificationController
 import app.routine.privilege.adb.discovery.WirelessAdbDiscovery
@@ -24,6 +25,9 @@ class AndroidPrivilegeSetupCoordinator @Inject constructor(
     private val discovery: WirelessAdbDiscovery,
     private val adbBridgeEngine: AdbBridgePrivilegedEngine,
 ) : PrivilegeSetupCoordinator {
+    override fun isWirelessAdbSupported(): Boolean =
+        BuildConfig.ALLOW_LOOPBACK_ADB_SOCKET && WirelessAdbDiscovery.hasInternetPermission(context)
+
     override fun buildOneTimeAdbCommand(): String = OneTimeGrantSetupHelper.buildAdbGrantCommand(context.packageName)
 
     override fun copyOneTimeCommandToClipboard(): String =

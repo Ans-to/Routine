@@ -6,6 +6,7 @@ import app.routine.privilege.adb.binder.RoutineShellService
 import app.routine.privilege.adb.crypto.AdbPairingCipher
 import app.routine.privilege.adb.crypto.AdbRsaKeyManager
 import app.routine.privilege.adb.crypto.AdbSpake2Session
+import app.routine.privilege.adb.discovery.WirelessAdbDiscovery
 import app.routine.privilege.adb.transport.AdbPacket
 import app.routine.privilege.adb.transport.AdbTransportClient
 import app.routine.privilege.api.PrivilegeAvailability
@@ -15,6 +16,7 @@ import app.routine.privilege.api.ShellCommandResult
 import java.io.File
 import java.net.ServerSocket
 import kotlin.concurrent.thread
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -138,4 +140,21 @@ class AdbBridgePrivilegedEngineTest {
         assertTrue(executedCommands[0].contains("pm grant app.routine"))
         assertTrue(executedCommands[1].contains("settings put secure night_display_activated"))
     }
+
+    @Test
+    fun `WirelessAdbDiscovery and pairAndBootstrap degrade cleanly without SecurityException when INTERNET absent`() =
+        runTest {
+            assertFalse(WirelessAdbDiscovery.hasInternetPermission(context))
+            val discovery = WirelessAdbDiscovery(context)
+            val endpoints = discovery.observePairingEndpoints().toList()
+            assertTrue(endpoints.isEmpty())
+
+            val engine = AdbBridgePrivilegedEngine(
+                context = context,
+                discovery = discovery,
+                shellServiceProvider = { null },
+            )
+            val pairResult = engine.pairAndBootstrap("127.0.0.1", 39999, "123456")
+            assertTrue(pairResult is PrivilegeOperationResult.Failed)
+        }
 }

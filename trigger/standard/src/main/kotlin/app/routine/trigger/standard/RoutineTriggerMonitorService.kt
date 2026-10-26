@@ -223,8 +223,9 @@ class RoutineTriggerMonitorService : Service() {
             null
         }
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        val connSsid = runCatching { wifiManager?.connectionInfo?.ssid }.getOrNull()
         val ssid = TriggerScheduler.normalizeSsid(transportSsid)
-            ?: TriggerScheduler.normalizeSsid(wifiManager?.connectionInfo?.ssid)
+            ?: TriggerScheduler.normalizeSsid(connSsid)
             ?: return
         val event = WifiTriggerReceiver.recordConnectedSsid(applicationContext, ssid) ?: return
         serviceScope.launch { dispatcher.dispatch(event) }

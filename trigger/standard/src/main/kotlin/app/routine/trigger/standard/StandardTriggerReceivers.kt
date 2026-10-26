@@ -166,8 +166,9 @@ class WifiTriggerReceiver : BroadcastReceiver() {
 
             if (isConnected) {
                 val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                val connSsid = runCatching { wifiManager?.connectionInfo?.ssid }.getOrNull()
                 val ssid = intent.getStringExtra("ssid")?.let { TriggerScheduler.normalizeSsid(it) }
-                    ?: TriggerScheduler.normalizeSsid(wifiManager?.connectionInfo?.ssid)
+                    ?: TriggerScheduler.normalizeSsid(connSsid)
                     ?: return null
                 return recordConnectedSsid(context, ssid)
             } else if (networkInfo?.state == NetworkInfo.State.DISCONNECTED) {

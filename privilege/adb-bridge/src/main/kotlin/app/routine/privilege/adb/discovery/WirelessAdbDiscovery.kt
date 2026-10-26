@@ -6,10 +6,13 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import androidx.core.content.ContextCompat
 import app.routine.privilege.adb.AdbBridgeConstants
 import app.routine.privilege.adb.AdbBridgePrivilegedEngine
 import dagger.hilt.EntryPoint
@@ -38,18 +41,34 @@ data class DiscoveredAdbEndpoint(
 
 /**
  * Discovers local Wireless Debugging mDNS ports using Android's platform [NsdManager].
+ *
+ * On Android 13+ (`ConnectivityFrameworkInitializerTiramisu`), simply retrieving `Context.NSD_SERVICE`
+ * enforces `android.permission.INTERNET` inside `NsdService.connect()`. In the strict zero-`INTERNET`
+ * `offline` flavor, [observeEndpoints] returns an empty completed [Flow] without touching `NSD_SERVICE`.
  */
 @Singleton
 class WirelessAdbDiscovery @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     fun observeEndpoints(serviceType: String): Flow<DiscoveredAdbEndpoint> = callbackFlow {
-        val nsdManager = context.getSystemService(Context.NSD_SERVICE) as? NsdManager
+        if (!hasInternetPermission(context)) {
+            android.util.Log.i(TAG, "Skipping NSD discovery: INTERNET permission absent in offline flavor")
+            close()
+            return@callbackFlow
+        }
+
+        val nsdManager = runCatching {
+            context.getSystemService(Context.NSD_SERVICE) as? NsdManager
+        }.onFailure { err ->
+            android.util.Log.w(TAG, "Unable to obtain NsdManager", err)
+        }.getOrNull()
+
         if (nsdManager == null) {
             close()
             return@callbackFlow
         }
 
+        val multicastLock = acquireMulticastLockSafely()
         val listener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(regType: String) = Unit
             override fun onDiscoveryStopped(serviceType: String) = Unit
@@ -62,33 +81,50 @@ class WirelessAdbDiscovery @Inject constructor(
             }
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                @Suppress("DEPRECATION")
-                nsdManager.resolveService(
-                    serviceInfo,
-                    object : NsdManager.ResolveListener {
-                        override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) = Unit
-                        override fun onServiceResolved(resolved: NsdServiceInfo) {
-                            @Suppress("DEPRECATION")
-                            val hostAddr = resolved.host?.hostAddress ?: "127.0.0.1"
-                            if (resolved.port > 0) {
-                                trySend(
-                                    DiscoveredAdbEndpoint(
-                                        host = hostAddr,
-                                        port = resolved.port,
-                                        serviceName = resolved.serviceName.orEmpty(),
-                                    ),
-                                )
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    nsdManager.resolveService(
+                        serviceInfo,
+                        object : NsdManager.ResolveListener {
+                            override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) = Unit
+                            override fun onServiceResolved(resolved: NsdServiceInfo) {
+                                @Suppress("DEPRECATION")
+                                val hostAddr = resolved.host?.hostAddress ?: "127.0.0.1"
+                                if (resolved.port > 0) {
+                                    trySend(
+                                        DiscoveredAdbEndpoint(
+                                            host = hostAddr,
+                                            port = resolved.port,
+                                            serviceName = resolved.serviceName.orEmpty(),
+                                        ),
+                                    )
+                                }
                             }
-                        }
-                    },
-                )
+                        },
+                    )
+                }.onFailure { err ->
+                    android.util.Log.w(TAG, "NSD resolveService failed", err)
+                }
             }
         }
 
-        nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
+        val started = runCatching {
+            nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
+            true
+        }.onFailure { err ->
+            android.util.Log.w(TAG, "NSD discoverServices failed", err)
+        }.getOrDefault(false)
+
+        if (!started) {
+            releaseMulticastLockSafely(multicastLock)
+            close()
+            return@callbackFlow
+        }
+
         awaitClose {
             runCatching { nsdManager.stopServiceDiscovery(listener) }
                 .onFailure { err -> android.util.Log.d(TAG, "Stopped NSD discovery", err) }
+            releaseMulticastLockSafely(multicastLock)
         }
     }
 
@@ -98,8 +134,31 @@ class WirelessAdbDiscovery @Inject constructor(
     fun observeConnectEndpoints(): Flow<DiscoveredAdbEndpoint> =
         observeEndpoints(AdbBridgeConstants.CONNECT_SERVICE_TYPE)
 
+    private fun acquireMulticastLockSafely(): WifiManager.MulticastLock? = runCatching {
+        val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        wifi?.createMulticastLock("routine_adb_mdns")?.apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }.onFailure { err ->
+        android.util.Log.d(TAG, "MulticastLock unavailable (continuing with standard NSD)", err)
+    }.getOrNull()
+
+    private fun releaseMulticastLockSafely(lock: WifiManager.MulticastLock?) {
+        if (lock == null) return
+        runCatching {
+            if (lock.isHeld) lock.release()
+        }.onFailure { err ->
+            android.util.Log.d(TAG, "MulticastLock release ignored", err)
+        }
+    }
+
     companion object {
         private const val TAG = "WirelessAdbDiscovery"
+
+        fun hasInternetPermission(context: Context): Boolean =
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.INTERNET) ==
+                PackageManager.PERMISSION_GRANTED
     }
 }
 
@@ -154,12 +213,14 @@ object PairingNotificationController {
             .addAction(action)
             .setOngoing(true)
             .build()
-        nm.notify(NOTIFICATION_ID, notification)
+        runCatching { nm.notify(NOTIFICATION_ID, notification) }
+            .onFailure { err -> android.util.Log.w("PairingNotifCtrl", "Unable to post pairing notification", err) }
     }
 
     fun dismiss(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(NOTIFICATION_ID)
+        runCatching { nm.cancel(NOTIFICATION_ID) }
+            .onFailure { err -> android.util.Log.d("PairingNotifCtrl", "Dismiss ignored", err) }
     }
 }
 

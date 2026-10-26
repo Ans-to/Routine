@@ -61,6 +61,7 @@ import app.routine.privilege.api.PrivilegedEngine
 import app.routine.trigger.standard.TriggerScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,6 +99,7 @@ class SettingsViewModel @Inject constructor(
 
     private var discoveryJob: Job? = null
 
+    val isWirelessAdbSupported: Boolean = setupCoordinator.isWirelessAdbSupported()
     val oneTimeCommand: String = setupCoordinator.buildOneTimeAdbCommand()
     val oneTimeQrMatrix: Array<BooleanArray> by lazy { setupCoordinator.encodeQrMatrix(oneTimeCommand) }
 
@@ -120,9 +122,22 @@ class SettingsViewModel @Inject constructor(
             mutableEndpoint.value = null
             return
         }
+        if (!isWirelessAdbSupported) {
+            mutableEndpoint.value = null
+            mutableStatusBanner.value =
+                "Option A requires the wirelessAdb APK flavor (127.0.0.1 loopback socket support)."
+            return
+        }
         discoveryJob = viewModelScope.launch {
-            setupCoordinator.observeWirelessPairingEndpoints().collect { ep ->
-                mutableEndpoint.value = ep
+            try {
+                setupCoordinator.observeWirelessPairingEndpoints().collect { ep ->
+                    mutableEndpoint.value = ep
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (err: Exception) {
+                android.util.Log.w("SettingsViewModel", "Wireless ADB discovery stopped", err)
+                mutableStatusBanner.value = "Port scan unavailable: ${err.message ?: "NSD error"}"
             }
         }
     }
@@ -252,6 +267,7 @@ fun SettingsScreen(onReplayOnboarding: () -> Unit, viewModel: SettingsViewModel 
         onSetThemeMode = viewModel::setThemeMode,
         onSetDynamicColor = viewModel::setDynamicColor,
         onReplayOnboarding = onReplayOnboarding,
+        isWirelessAdbSupported = viewModel.isWirelessAdbSupported,
     )
 }
 
@@ -275,6 +291,7 @@ fun SettingsContent(
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetDynamicColor: (Boolean) -> Unit,
     onReplayOnboarding: () -> Unit,
+    isWirelessAdbSupported: Boolean = true,
 ) {
     val context = LocalContext.current
     var pendingPermission by rememberSaveable { mutableStateOf<SystemPermission?>(null) }
@@ -319,6 +336,7 @@ fun SettingsContent(
                 qrMatrix = qrMatrix,
                 discoveredEndpoint = discoveredEndpoint,
                 autoReconnect = preferences.wirelessDebuggingAutoReconnect,
+                isWirelessAdbSupported = isWirelessAdbSupported,
                 onRecheckStatus = onRecheckStatus,
                 onCopyCommand = onCopyCommand,
                 onOpenDevOptions = { pendingPermission = SystemPermission.ADB_SHELL_BRIDGE },
@@ -354,6 +372,7 @@ private fun PrivilegedSetupSection(
     qrMatrix: Array<BooleanArray>,
     discoveredEndpoint: PairingEndpointInfo?,
     autoReconnect: Boolean,
+    isWirelessAdbSupported: Boolean,
     onRecheckStatus: () -> Unit,
     onCopyCommand: () -> Unit,
     onOpenDevOptions: () -> Unit,
@@ -409,19 +428,28 @@ private fun PrivilegedSetupSection(
             }
 
             Text(text = stringResource(R.string.settings_opt_a_title), style = MaterialTheme.typography.titleSmall)
-            Text(text = stringResource(R.string.settings_opt_a_steps), style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenDevOptions) {
-                    Text(stringResource(R.string.settings_open_dev_options))
-                }
-                val scanBtnRes = if (scanning) R.string.settings_scan_ports_stop else R.string.settings_scan_ports_start
-                Button(
-                    onClick = {
-                        scanning = !scanning
-                        onSetScanning(scanning)
-                    },
-                ) {
-                    Text(stringResource(scanBtnRes))
+            if (!isWirelessAdbSupported) {
+                Text(
+                    text = stringResource(R.string.settings_opt_a_offline_notice),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            } else {
+                Text(text = stringResource(R.string.settings_opt_a_steps), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onOpenDevOptions) {
+                        Text(stringResource(R.string.settings_open_dev_options))
+                    }
+                    val scanBtnRes =
+                        if (scanning) R.string.settings_scan_ports_stop else R.string.settings_scan_ports_start
+                    Button(
+                        onClick = {
+                            scanning = !scanning
+                            onSetScanning(scanning)
+                        },
+                    ) {
+                        Text(stringResource(scanBtnRes))
+                    }
                 }
             }
             if (scanning) {

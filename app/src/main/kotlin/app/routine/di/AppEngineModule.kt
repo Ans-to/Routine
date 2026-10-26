@@ -70,7 +70,11 @@ object AppEngineModule {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
                 .build()
-            nm.notify(("cb_${rule.id}").hashCode() and 0x7FFFFFFF, notification)
+            runCatching {
+                nm.notify(("cb_${rule.id}").hashCode() and 0x7FFFFFFF, notification)
+            }.onFailure { err ->
+                android.util.Log.w("AppEngineModule", "Circuit-breaker notification blocked", err)
+            }
         }
 
     @Provides

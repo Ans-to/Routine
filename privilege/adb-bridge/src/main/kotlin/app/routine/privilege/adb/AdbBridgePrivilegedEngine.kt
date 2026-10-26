@@ -117,6 +117,11 @@ class AdbBridgePrivilegedEngine(
      */
     suspend fun pairAndBootstrap(host: String, pairingPort: Int, pairingCode: String): PrivilegeOperationResult =
         withContext(Dispatchers.IO) {
+            if (!WirelessAdbDiscovery.hasInternetPermission(context)) {
+                return@withContext PrivilegeOperationResult.Failed(
+                    "Wireless Debugging requires the wirelessAdb APK flavor (loopback socket permission).",
+                )
+            }
             runCatching {
                 transportClient.pairWithLocalDaemon(host, pairingPort, pairingCode)
                 val connectEndpoint = withTimeoutOrNull(8_000L) {
@@ -167,6 +172,11 @@ class AdbBridgePrivilegedEngine(
     suspend fun reconnectAfterBoot(): PrivilegeOperationResult = withContext(Dispatchers.IO) {
         if (shellServiceProvider() != null) {
             return@withContext PrivilegeOperationResult.Succeeded("ADB Bridge already connected.")
+        }
+        if (!WirelessAdbDiscovery.hasInternetPermission(context)) {
+            return@withContext PrivilegeOperationResult.Failed(
+                "Offline flavor does not use loopback Wireless Debugging sockets.",
+            )
         }
         val hasSecure = ContextCompat.checkSelfPermission(context, WRITE_SECURE_SETTINGS) ==
             PackageManager.PERMISSION_GRANTED

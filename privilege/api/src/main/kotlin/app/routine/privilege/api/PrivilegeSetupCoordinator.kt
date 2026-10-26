@@ -18,6 +18,16 @@ data class PairingEndpointInfo(
  */
 interface PrivilegeSetupCoordinator {
     /**
+     * Indicates whether this APK build includes local loopback socket support for Option A
+     * (Wireless Debugging). Returns `false` in the strict zero-`INTERNET` `offline` flavor.
+     *
+     * Contract: Synchronously checks build capability and manifest permission state.
+     * Failure modes: Never throws; returns `false` if permission lookup fails.
+     * Thread safety: Stateless check; safe to invoke from any thread.
+     */
+    fun isWirelessAdbSupported(): Boolean = true
+
+    /**
      * Returns the exact single-line `adb shell pm grant` command for Option B setup.
      *
      * Contract: Produces a deterministic command targeting the host application's package name.

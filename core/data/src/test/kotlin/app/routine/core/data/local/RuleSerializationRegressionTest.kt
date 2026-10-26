@@ -1,6 +1,5 @@
 package app.routine.core.data.local
 
-import app.routine.core.data.repository.RoutineBackupPayload
 import app.routine.core.data.repository.RoutineBackupSerializer
 import app.routine.core.model.Action
 import app.routine.core.model.ActionType
@@ -44,17 +43,16 @@ class RuleSerializationRegressionTest {
 
     @Test
     fun `RoutineBackupSerializer explicit serializer round-trips multi-rule payload without reflection`() {
-        val serializer = RoutineBackupSerializer()
         val rule = Rule(
             id = "backup_1",
             name = "Backup Test",
             trigger = Trigger(TriggerType.BATTERY_LEVEL, mapOf("thresholdPercent" to "20", "direction" to "BELOW")),
-            actions = listOf(Action(ActionType.BATTERY_SAVER_PROMPT)),
+            actions = listOf(Action(ActionType.TOAST, mapOf("message" to "Battery below 20%"))),
             enabled = true,
         )
-        val raw = serializer.encode(listOf(rule), exportedAtEpochMs = 1_700_000_000_000L)
-        val decoded: RoutineBackupPayload = serializer.decode(raw)
-        assertEquals(1, decoded.rules.size)
-        assertEquals(rule, decoded.rules.single())
+        val raw = RoutineBackupSerializer.exportToJson(listOf(rule), exportedAtEpochMs = 1_700_000_000_000L)
+        val decoded = RoutineBackupSerializer.importFromJson(raw).getOrThrow()
+        assertEquals(1, decoded.size)
+        assertEquals(rule, decoded.single())
     }
 }

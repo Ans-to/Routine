@@ -7,6 +7,7 @@
       Prominent disclosure is presented in-app prior to any local ADB connection.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application android:networkSecurityConfig="@xml/network_security_config" />
 </manifest>
