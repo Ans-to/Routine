@@ -117,19 +117,19 @@ class AdbBridgePrivilegedEngine(
      */
     suspend fun pairAndBootstrap(host: String, pairingPort: Int, pairingCode: String): PrivilegeOperationResult =
         withContext(Dispatchers.IO) {
-        runCatching {
-            transportClient.pairWithLocalDaemon(host, pairingPort, pairingCode)
-            val connectEndpoint = withTimeoutOrNull(8_000L) {
-                discovery?.observeConnectEndpoints()?.first()
-            } ?: return@withContext PrivilegeOperationResult.Failed(
-                "Paired successfully, but timed out waiting for Wireless Debugging connect port.",
-            )
-            connectAndLaunchShellServer(connectEndpoint.host, connectEndpoint.port)
-        }.getOrElse { error ->
-            android.util.Log.w(TAG, "pairAndBootstrap failed", error)
-            PrivilegeOperationResult.Failed("Wireless Debugging pairing failed: ${error.message}")
+            runCatching {
+                transportClient.pairWithLocalDaemon(host, pairingPort, pairingCode)
+                val connectEndpoint = withTimeoutOrNull(8_000L) {
+                    discovery?.observeConnectEndpoints()?.first()
+                } ?: return@withContext PrivilegeOperationResult.Failed(
+                    "Paired successfully, but timed out waiting for Wireless Debugging connect port.",
+                )
+                connectAndLaunchShellServer(connectEndpoint.host, connectEndpoint.port)
+            }.getOrElse { error ->
+                android.util.Log.w(TAG, "pairAndBootstrap failed", error)
+                PrivilegeOperationResult.Failed("Wireless Debugging pairing failed: ${error.message}")
+            }
         }
-    }
 
     /**
      * Connects to an already-paired Wireless Debugging port, launches Routine's internal `app_process`
