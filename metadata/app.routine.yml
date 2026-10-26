@@ -1,0 +1,28 @@
+Categories:
+  - System
+  - Time
+License: GPL-3.0-only
+AuthorName: Routine Contributors
+SourceCode: https://github.com/Ans-to/Routine
+IssueTracker: https://github.com/Ans-to/Routine/issues
+Changelog: https://github.com/Ans-to/Routine/releases
+
+AutoName: Routine
+RepoType: git
+Repo: https://github.com/Ans-to/Routine.git
+
+Builds:
+  - versionName: 0.1.0-alpha
+    versionCode: 1
+    commit: v0.1.0-alpha
+    subdir: app
+    gradle:
+      - offline
+    srclibs: []
+    prebuild: sed -i -e '/wirelessAdb/,+5d' build.gradle.kts
+
+AllowedAPKSigningKeys: ""
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.1.0-alpha
+CurrentVersionCode: 1

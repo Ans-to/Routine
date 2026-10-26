@@ -1,0 +1,13 @@
+Routine is a local-first, 100% self-contained Android automation app designed around clarity, privacy, and zero external companion apps.
+
+Pick any of 20 one-tap automation templates or build your own linear rule (1 trigger + up to 3 ordered actions) with live side-effect-free dry-run previews.
+
+Key features:
+• Zero external apps required: No Shizuku, Tasker, Termux, or LADB needed.
+• Three built-in capability tiers:
+  1. Standard Tier — works out of the box with graceful fallbacks when permissions are declined.
+  2. One-Time ADB Grant — run a single adb command once (with built-in QR code & clipboard helper) for persistent secure-setting toggles across reboots.
+  3. Built-in Wireless Debugging Bridge — pure-Kotlin local pairing & internal Binder shell server from Routine's own APK.
+• Privacy by default: No INTERNET permission in the default F-Droid / offline build, zero cloud sync, zero analytics, and zero ad SDKs.
+• Encrypted storage: Rules and capped 1,000-entry redacted execution logs are encrypted at rest with SQLCipher + Android Keystore AES-256-GCM.
+• Built-in safety rails: 5-failure circuit breaker with automatic rule pause, per-rule cooldowns, and schema-versioned local JSON backup/restore via the Android system document picker.

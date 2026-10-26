@@ -1,0 +1,5 @@
+Initial v0.1.0-alpha public preview:
+• 20 self-contained automation templates with live capability badges
+• Linear Rule Editor (1 trigger + up to 3 reorderable actions) with side-effect-free Test Rule dry-run
+• Self-contained Privileged Engine (One-Time ADB Grant + built-in Wireless Debugging ADB Bridge)
+• SQLCipher + Android Keystore encrypted Room database with 1,000-entry redacted logs and SAF JSON backup/restore

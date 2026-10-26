@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish (e.g. v0.1.0-alpha)"
+        required: true
+        default: "v0.1.0-alpha"
 
 permissions:
   contents: write
@@ -14,12 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Generate Ephemeral Release Keystore
+      - name: Determine Release Tag
+        id: meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.release_tag || 'v0.1.0-alpha' }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Generate Release Keystore
         run: |
           keytool -genkeypair -v \
             -keystore /tmp/routine-release.jks \
@@ -41,31 +55,39 @@ jobs:
         run: |
           APK_FIRST=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
           SHA_FIRST=$(sha256sum "$APK_FIRST" | awk '{print $1}')
-          ./gradlew clean assembleOfflineRelease --stacktrace
+          ./gradlew clean assembleOfflineRelease assembleWirelessAdbRelease --stacktrace
           APK_SECOND=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
           SHA_SECOND=$(sha256sum "$APK_SECOND" | awk '{print $1}')
           echo "First SHA256:  $SHA_FIRST"
           echo "Second SHA256: $SHA_SECOND"
           test "$SHA_FIRST" = "$SHA_SECOND"
-      - name: Verify APK Under 15 MB
+      - name: Verify APK Size Under 15 MB & Package Artifacts
         run: |
+          TAG="${{ steps.meta.outputs.tag }}"
           APK=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
           SIZE_BYTES=$(stat -c%s "$APK")
+          echo "Offline Release APK size: $SIZE_BYTES bytes"
           test "$SIZE_BYTES" -lt 15728640
-          cp "$APK" "Routine-${GITHUB_REF_NAME}-offline.apk"
+          cp "$APK" "Routine-${TAG}-offline.apk"
           WIRELESS_APK=$(find app/build/outputs/apk/wirelessAdb/release -name "*.apk" | head -n 1)
-          cp "$WIRELESS_APK" "Routine-${GITHUB_REF_NAME}-wirelessAdb.apk"
-          sha256sum Routine-${GITHUB_REF_NAME}-*.apk > SHA256SUMS.txt
-      - name: Create GitHub Release
+          WIRELESS_BYTES=$(stat -c%s "$WIRELESS_APK")
+          echo "WirelessAdb Release APK size: $WIRELESS_BYTES bytes"
+          test "$WIRELESS_BYTES" -lt 15728640
+          cp "$WIRELESS_APK" "Routine-${TAG}-wirelessAdb.apk"
+          sha256sum Routine-${TAG}-*.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" Routine-${GITHUB_REF_NAME}-*.apk SHA256SUMS.txt --clobber
+          TAG="${{ steps.meta.outputs.tag }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Routine-${TAG}-*.apk SHA256SUMS.txt --clobber
           else
-            gh release create "${GITHUB_REF_NAME}" \
-              Routine-${GITHUB_REF_NAME}-*.apk SHA256SUMS.txt \
-              --title "Routine ${GITHUB_REF_NAME}" \
-              --generate-notes \
+            gh release create "$TAG" \
+              Routine-${TAG}-*.apk SHA256SUMS.txt \
+              --target "${GITHUB_SHA}" \
+              --title "Routine ${TAG}" \
+              --notes-file fastlane/metadata/android/en-US/changelogs/1.txt \
               --prerelease
           fi

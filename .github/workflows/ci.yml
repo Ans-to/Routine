@@ -7,6 +7,9 @@ on:
       - "arena/**"
   pull_request:
 
+permissions:
+  contents: write
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -54,11 +57,11 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Run JVM & Robolectric Unit Tests
+      - name: Run JVM, Robolectric, Compose & JaCoCo Coverage Gates
         run: |
           set -o pipefail
-          if ! ./gradlew testDebugUnitTest :app:testOfflineDebugUnitTest :core:model:test :core:permissions:test :core:engine:test :privilege:api:test --stacktrace 2>&1 | tee /tmp/test.log; then
-            grep -E "^e: |FAILED|AssertionError|What went wrong|Caused by:" /tmp/test.log | head -n 9 | while IFS= read -r l; do echo "::error title=unit-test::$l"; done
+          if ! ./gradlew testDebugUnitTest :app:testOfflineDebugUnitTest :core:model:test :core:permissions:test :core:engine:test :privilege:api:test :core:data:verifyCoreDataJacocoCoverage --stacktrace 2>&1 | tee /tmp/test.log; then
+            grep -E "^e: |FAILED|AssertionError|Rule violated|What went wrong|Caused by:" /tmp/test.log | head -n 9 | while IFS= read -r l; do echo "::error title=unit-test::$l"; done
             exit 1
           fi
 
@@ -73,32 +76,85 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Assemble Debug & Release APKs
+      - name: Generate Release Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore /tmp/routine-release.jks \
+            -storetype PKCS12 \
+            -alias routine \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass routine-alpha \
+            -keypass routine-alpha \
+            -dname "CN=Routine Open Source, OU=Android, O=Routine, L=OpenSource, ST=Global, C=US"
+      - name: Assemble Signed Debug & Release APKs
+        env:
+          SIGNING_STORE_FILE: /tmp/routine-release.jks
         run: |
           set -o pipefail
-          if ! ./gradlew assembleOfflineDebug assembleOfflineRelease --stacktrace 2>&1 | tee /tmp/build.log; then
+          if ! ./gradlew assembleOfflineDebug assembleOfflineRelease assembleWirelessAdbRelease --stacktrace 2>&1 | tee /tmp/build.log; then
             grep -E "^e: |Error:|What went wrong|Caused by:" /tmp/build.log | head -n 9 | while IFS= read -r l; do echo "::error title=build::$l"; done
             exit 1
           fi
       - name: Verify Default Build Has No INTERNET Permission
         run: |
-          MANIFEST=$(find app/build/intermediates/merged_manifest/offlineDebug -name "AndroidManifest.xml" | head -n 1)
-          test -n "$MANIFEST"
-          if grep -q "android.permission.INTERNET" "$MANIFEST"; then
-            echo "::error title=policy::Default offline flavor must NEVER request android.permission.INTERNET"
-            exit 1
-          fi
-          echo "Verified: No INTERNET permission in default offline flavor ($MANIFEST)."
+          for VARIANT in offlineDebug offlineRelease; do
+            MANIFEST=$(find "app/build/intermediates/merged_manifest/${VARIANT}" -name "AndroidManifest.xml" | head -n 1)
+            test -n "$MANIFEST"
+            if grep -q "android.permission.INTERNET" "$MANIFEST"; then
+              echo "::error title=policy::Default ${VARIANT} must NEVER request android.permission.INTERNET"
+              exit 1
+            fi
+          done
+          echo "Verified: No INTERNET permission in default offlineDebug or offlineRelease manifests."
       - name: Verify Release APK Size Under 15 MB
         run: |
           APK=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
           test -n "$APK"
           SIZE_BYTES=$(stat -c%s "$APK")
-          echo "Release APK: $APK ($SIZE_BYTES bytes)"
+          echo "Offline Release APK: $APK ($SIZE_BYTES bytes)"
           echo "### APK Size Gate: $SIZE_BYTES bytes (< 15,728,640 bytes)" >> "$GITHUB_STEP_SUMMARY"
           if [ "$SIZE_BYTES" -ge 15728640 ]; then
-            echo "::error title=apk-size::Release APK exceeds 15 MB ($SIZE_BYTES bytes)"
+            echo "::error title=apk-size::Offline Release APK exceeds 15 MB ($SIZE_BYTES bytes)"
             exit 1
+          fi
+      - name: Verify Reproducible Release APK Build
+        env:
+          SIGNING_STORE_FILE: /tmp/routine-release.jks
+        run: |
+          APK_FIRST=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
+          SHA_FIRST=$(sha256sum "$APK_FIRST" | awk '{print $1}')
+          ./gradlew clean assembleOfflineRelease assembleWirelessAdbRelease --stacktrace
+          APK_SECOND=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
+          SHA_SECOND=$(sha256sum "$APK_SECOND" | awk '{print $1}')
+          echo "First SHA256:  $SHA_FIRST"
+          echo "Second SHA256: $SHA_SECOND"
+          if [ "$SHA_FIRST" != "$SHA_SECOND" ]; then
+            echo "::error title=reproducibility::Non-deterministic APK build ($SHA_FIRST != $SHA_SECOND)"
+            exit 1
+          fi
+          echo "### Reproducible APK Verified: \`$SHA_FIRST\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish v0.1.0-alpha Signed Release Artifacts
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v0.1.0-alpha"
+          OFFLINE_APK=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
+          WIRELESS_APK=$(find app/build/outputs/apk/wirelessAdb/release -name "*.apk" | head -n 1)
+          cp "$OFFLINE_APK" "Routine-${TAG}-offline.apk"
+          cp "$WIRELESS_APK" "Routine-${TAG}-wirelessAdb.apk"
+          sha256sum Routine-${TAG}-*.apk > SHA256SUMS.txt
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Routine-${TAG}-*.apk SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" \
+              Routine-${TAG}-*.apk SHA256SUMS.txt \
+              --target "${GITHUB_SHA}" \
+              --title "Routine ${TAG}" \
+              --notes-file fastlane/metadata/android/en-US/changelogs/1.txt \
+              --prerelease
           fi
       - uses: actions/upload-artifact@v4
         with:
