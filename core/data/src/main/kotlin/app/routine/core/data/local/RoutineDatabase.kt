@@ -62,16 +62,22 @@ class SqlCipherKeyManager(
     }
 
     fun getOrCreatePassphrase(): ByteArray {
-        val masterKey = getOrCreateMasterKey()
         val existingCiphertext = prefs.getString(KEY_WRAPPED_PASSPHRASE, null)
         val existingIv = prefs.getString(KEY_WRAPPED_IV, null)
         if (existingCiphertext != null && existingIv != null) {
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            val ivBytes = Base64.decode(existingIv, Base64.NO_WRAP)
-            cipher.init(Cipher.DECRYPT_MODE, masterKey, GCMParameterSpec(GCM_TAG_BITS, ivBytes))
-            return cipher.doFinal(Base64.decode(existingCiphertext, Base64.NO_WRAP))
+            try {
+                val masterKey = getOrCreateMasterKey()
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                val ivBytes = Base64.decode(existingIv, Base64.NO_WRAP)
+                cipher.init(Cipher.DECRYPT_MODE, masterKey, GCMParameterSpec(GCM_TAG_BITS, ivBytes))
+                return cipher.doFinal(Base64.decode(existingCiphertext, Base64.NO_WRAP))
+            } catch (error: Exception) {
+                android.util.Log.w("SqlCipherKeyManager", "Resetting invalidated SQLCipher keystore entry", error)
+                resetInvalidatedKeyAndDatabase()
+            }
         }
 
+        val masterKey = getOrCreateMasterKey()
         val rawPassphrase = ByteArray(PASSPHRASE_BYTES).also { SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, masterKey)
@@ -81,6 +87,19 @@ class SqlCipherKeyManager(
             .putString(KEY_WRAPPED_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .apply()
         return rawPassphrase
+    }
+
+    private fun resetInvalidatedKeyAndDatabase() {
+        prefs.edit().clear().commit()
+        context.deleteDatabase(DatabaseConstants.DATABASE_NAME)
+        runCatching {
+            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+            if (keyStore.containsAlias(KEYSTORE_ALIAS)) {
+                keyStore.deleteEntry(KEYSTORE_ALIAS)
+            }
+        }.onFailure { err ->
+            android.util.Log.w("SqlCipherKeyManager", "Unable to delete stale keystore alias", err)
+        }
     }
 
     private fun getOrCreateMasterKey(): SecretKey {

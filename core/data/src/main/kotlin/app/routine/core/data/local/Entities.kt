@@ -10,7 +10,7 @@ import app.routine.core.model.LogStatus
 import app.routine.core.model.Rule
 import app.routine.core.model.Trigger
 import app.routine.core.model.TriggerType
-import kotlinx.serialization.encodeToString
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 /**
@@ -35,8 +35,8 @@ data class RuleEntity(
     fun toDomain(json: Json = RoutineJson): Rule = Rule(
         id = id,
         name = name,
-        trigger = json.decodeFromString<Trigger>(triggerJson),
-        actions = json.decodeFromString<List<Action>>(actionsJson),
+        trigger = json.decodeFromString(Trigger.serializer(), triggerJson),
+        actions = json.decodeFromString(ActionsListSerializer, actionsJson),
         enabled = enabled,
         cooldownSeconds = cooldownSeconds,
         consecutiveFailures = consecutiveFailures,
@@ -45,6 +45,8 @@ data class RuleEntity(
     )
 
     companion object {
+        private val ActionsListSerializer = ListSerializer(Action.serializer())
+
         val RoutineJson: Json = Json {
             ignoreUnknownKeys = true
             encodeDefaults = true
@@ -54,8 +56,8 @@ data class RuleEntity(
             id = rule.id,
             name = rule.name,
             triggerType = rule.trigger.type.name,
-            triggerJson = json.encodeToString(rule.trigger),
-            actionsJson = json.encodeToString(rule.actions),
+            triggerJson = json.encodeToString(Trigger.serializer(), rule.trigger),
+            actionsJson = json.encodeToString(ActionsListSerializer, rule.actions),
             enabled = rule.enabled,
             cooldownSeconds = rule.cooldownSeconds,
             consecutiveFailures = rule.consecutiveFailures,

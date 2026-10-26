@@ -13,7 +13,7 @@ enum class TriggerType(
     /** Daily or weekly exact-time alarm trigger (`hour`, `minute`, optional `daysOfWeek`, `requireCharging`). */
     TIME(
         requiredTier = PrivilegeTier.STANDARD,
-        requiredPermissions = setOf(SystemPermission.SCHEDULE_EXACT_ALARM),
+        requiredPermissions = emptySet(),
     ),
 
     /** Battery percentage threshold trigger (`thresholdPercent`, `direction` = `BELOW` or `ABOVE`, `chargingOnly`). */
@@ -82,7 +82,7 @@ enum class TriggerType(
     /** Wi-Fi hotspot active for configured duration (`durationMinutes`, default `30`). */
     HOTSPOT_DURATION(
         requiredTier = PrivilegeTier.PRIVILEGED,
-        requiredPermissions = setOf(SystemPermission.SCHEDULE_EXACT_ALARM),
+        requiredPermissions = emptySet(),
     ),
 
     /** Incoming call screening trigger (`unknownOnly` = `true`). */

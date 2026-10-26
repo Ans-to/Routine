@@ -24,7 +24,6 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private val Context.userPreferencesDataStore by preferencesDataStore(name = "routine_user_prefs")
@@ -200,6 +199,7 @@ object RoutineBackupSerializer {
 
     fun exportToJson(rules: List<Rule>, exportedAtEpochMs: Long = System.currentTimeMillis()): String =
         backupJson.encodeToString(
+            RoutineBackupPayload.serializer(),
             RoutineBackupPayload(
                 schemaVersion = RoutineBackupPayload.CURRENT_SCHEMA_VERSION,
                 exportedAtEpochMs = exportedAtEpochMs,
@@ -208,7 +208,7 @@ object RoutineBackupSerializer {
         )
 
     fun importFromJson(rawJson: String): Result<List<Rule>> = runCatching {
-        val payload = backupJson.decodeFromString<RoutineBackupPayload>(rawJson)
+        val payload = backupJson.decodeFromString(RoutineBackupPayload.serializer(), rawJson)
         require(payload.schemaVersion in 1..RoutineBackupPayload.CURRENT_SCHEMA_VERSION) {
             "Unsupported backup schemaVersion=${payload.schemaVersion}."
         }

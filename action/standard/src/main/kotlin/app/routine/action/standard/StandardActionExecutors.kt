@@ -120,8 +120,15 @@ class RingerActionExecutor @Inject constructor(
             "NORMAL" -> AudioManager.RINGER_MODE_NORMAL
             else -> return ActionExecutionOutcome.Failure("Unsupported ringer mode '$modeName'.")
         }
-        audioManager.ringerMode = targetMode
-        return ActionExecutionOutcome.Success("Set ringer mode to $modeName")
+        return try {
+            audioManager.ringerMode = targetMode
+            ActionExecutionOutcome.Success("Set ringer mode to $modeName")
+        } catch (error: SecurityException) {
+            android.util.Log.w("RingerActionExecutor", "Ringer update blocked by active DND policy", error)
+            ActionExecutionOutcome.Failure(
+                "Do Not Disturb is active; grant Notification Policy Access to change ringer mode.",
+            )
+        }
     }
 }
 
@@ -138,25 +145,57 @@ class OpenAppActionExecutor @Inject constructor(
         val packageName = action.config["packageName"]?.trim().orEmpty()
         val category = action.config["category"]?.trim()?.uppercase().orEmpty()
 
-        val launchIntent: Intent? = when {
-            packageName.isNotEmpty() -> context.packageManager.getLaunchIntentForPackage(packageName)
-            category == "MUSIC" -> Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MUSIC)
-            category == "NEWS" -> Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER)
-            else -> null
+        val candidates: List<Intent> = when {
+            packageName.isNotEmpty() -> listOfNotNull(context.packageManager.getLaunchIntentForPackage(packageName))
+            category == "MUSIC" -> buildMusicLaunchCandidates()
+            category == "NEWS" -> buildBrowserLaunchCandidates()
+            else -> emptyList()
         }
 
-        if (launchIntent == null) {
+        if (candidates.isEmpty()) {
             val targetLabel = packageName.ifEmpty { category.ifEmpty { "unspecified" } }
             return ActionExecutionOutcome.Failure("Unable to resolve launch intent for '$targetLabel'.")
         }
 
-        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return runCatching {
-            context.startActivity(launchIntent)
-            ActionExecutionOutcome.Success("Launched app (${packageName.ifEmpty { category }})")
-        }.getOrElse { error ->
-            ActionExecutionOutcome.Failure("Failed to start activity: ${error.message}")
+        var lastError: String? = null
+        for (candidate in candidates) {
+            candidate.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val started = runCatching {
+                context.startActivity(candidate)
+                true
+            }.getOrElse { error ->
+                lastError = error.message
+                false
+            }
+            if (started) {
+                return ActionExecutionOutcome.Success("Launched app (${packageName.ifEmpty { category }})")
+            }
         }
+        return ActionExecutionOutcome.Failure("Failed to start activity: ${lastError ?: "no matching app installed"}")
+    }
+
+    private fun buildMusicLaunchCandidates(): List<Intent> = buildList {
+        add(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MUSIC))
+        add(Intent("android.intent.action.MUSIC_PLAYER"))
+        KNOWN_MUSIC_PACKAGES.forEach { pkg ->
+            context.packageManager.getLaunchIntentForPackage(pkg)?.let { add(it) }
+        }
+    }
+
+    private fun buildBrowserLaunchCandidates(): List<Intent> = buildList {
+        add(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER))
+        add(Intent(Intent.ACTION_VIEW, Uri.parse("https://f-droid.org")))
+    }
+
+    companion object {
+        private val KNOWN_MUSIC_PACKAGES = listOf(
+            "org.oxycblt.auxio",
+            "org.akanework.gramophone",
+            "org.videolan.vlc",
+            "in.krosbits.musicolet",
+            "com.spotify.music",
+            "com.google.android.apps.youtube.music",
+        )
     }
 }
 

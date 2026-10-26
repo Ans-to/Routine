@@ -49,6 +49,20 @@ data class Rule(
             ) {
                 remove(SystemPermission.READ_CALENDAR)
             }
+            val needsDirectSms = actions.any {
+                it.type == ActionType.SMS_AUTO_REPLY && it.config["mode"]?.uppercase() == "DIRECT"
+            }
+            if (!needsDirectSms) {
+                remove(SystemPermission.SEND_SMS)
+            }
+            val needsDndPolicy = actions.any { action ->
+                val mode = action.config["mode"]?.uppercase() ?: "SILENT"
+                action.type == ActionType.DO_NOT_DISTURB ||
+                    (action.type == ActionType.RINGER_MODE && mode == "SILENT")
+            }
+            if (!needsDndPolicy) {
+                remove(SystemPermission.NOTIFICATION_POLICY_ACCESS)
+            }
         }
         return base
     }
