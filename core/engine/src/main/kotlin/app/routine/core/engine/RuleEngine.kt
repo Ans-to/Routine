@@ -106,11 +106,7 @@ class RuleEngine @Inject constructor(
         return executeLiveSteps(rule, event, startedAt, actionTimeoutMs)
     }
 
-    private suspend fun runDry(
-        rule: Rule,
-        capability: Capability,
-        startedAt: Long,
-    ): ExecutionResult.DryRunCompleted {
+    private suspend fun runDry(rule: Rule, capability: Capability, startedAt: Long): ExecutionResult.DryRunCompleted {
         val steps = rule.actions.mapIndexed { idx, action ->
             val executor = executorRegistry.executorFor(action.type)
             val summary = executor?.describeDryRun(action)
@@ -252,12 +248,7 @@ class RuleEngine @Inject constructor(
         is Capability.Blocked -> capability.reason
     }
 
-    private suspend fun logExecution(
-        rule: Rule,
-        status: LogStatus,
-        rawMessage: String,
-        timestampEpochMs: Long,
-    ) {
+    private suspend fun logExecution(rule: Rule, status: LogStatus, rawMessage: String, timestampEpochMs: Long) {
         logSink.append(
             ExecutionLogEntry(
                 ruleId = rule.id,
