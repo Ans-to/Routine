@@ -1,8 +1,8 @@
 package app.routine
 
-import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Enforces Routine's non-negotiable architectural and language constraints across the repository.

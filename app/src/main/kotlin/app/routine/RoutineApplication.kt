@@ -13,7 +13,6 @@ import javax.inject.Inject
 class RoutineApplication :
     Application(),
     Configuration.Provider {
-
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
