@@ -16,11 +16,10 @@ import dagger.multibindings.ElementsIntoSet
  * Digital Wellbeing grayscale/theme schedules, e-book/camera focus, and battery/alarm routines.
  */
 object ResearchedTemplateCatalog {
-    fun providers(): Set<TemplateProvider> =
-        providersTwentyOneToTwentyFive() +
-            providersTwentySixToThirty() +
-            providersThirtyOneToThirtyFive() +
-            providersThirtySixToForty()
+    fun providers(): Set<TemplateProvider> = providersTwentyOneToTwentyFive() +
+        providersTwentySixToThirty() +
+        providersThirtyOneToThirtyFive() +
+        providersThirtySixToForty()
 
     private fun providersTwentyOneToTwentyFive(): Set<TemplateProvider> = setOf(
         StaticTemplateProvider(
