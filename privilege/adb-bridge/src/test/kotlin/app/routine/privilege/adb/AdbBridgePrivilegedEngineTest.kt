@@ -27,6 +27,7 @@ import java.security.Security
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 import kotlin.concurrent.thread
@@ -99,136 +100,148 @@ class AdbBridgePrivilegedEngineTest {
             val client = AdbTransportClient(clientKeys) { deterministicExported }
             val serverSslContext = AdbTransportClient(serverKeys).buildAdbSslContext()
 
-            val sslServer = serverSslContext.serverSocketFactory
-                .createServerSocket(0, 4, InetAddress.getByName("127.0.0.1")) as SSLServerSocket
-            sslServer.enabledProtocols = arrayOf("TLSv1.3")
-            sslServer.use { pairingServer ->
-                var receivedClientPubKey = ""
-                val doneLatch = CountDownLatch(1)
-                val serverErr = AtomicReference<Throwable?>(null)
-                val serverThread = thread {
-                    runCatching {
-                        (pairingServer.accept() as SSLSocket).use { tls ->
-                            tls.enabledProtocols = arrayOf("TLSv1.3")
-                            tls.startHandshake()
-                            val dis = DataInputStream(tls.inputStream)
-                            val out = tls.outputStream
-
-                            val clientMsgHeader = ByteArray(6).also { dis.readFully(it) }
-                            val msgBuf = ByteBuffer.wrap(clientMsgHeader).order(ByteOrder.BIG_ENDIAN)
-                            assertEquals(1, msgBuf.get().toInt())
-                            assertEquals(AdbTransportClient.PACKET_TYPE_SPAKE2_MSG.toInt(), msgBuf.get().toInt())
-                            val clientSpakeMsg = ByteArray(msgBuf.int).also { dis.readFully(it) }
-
-                            val serverSecret = "619402".encodeToByteArray() + deterministicExported
-                            val bob = AdbSpake2Session(AdbSpake2Session.Role.SERVER, serverSecret)
-                            val serverMsgFrame = ByteBuffer.allocate(6 + bob.publicMessage.size)
-                                .order(ByteOrder.BIG_ENDIAN)
-                                .put(1.toByte())
-                                .put(AdbTransportClient.PACKET_TYPE_SPAKE2_MSG)
-                                .putInt(bob.publicMessage.size)
-                                .put(bob.publicMessage)
-                                .array()
-                            out.write(serverMsgFrame)
-                            out.flush()
-
-                            val serverCipher = bob.processPeerMessage(clientSpakeMsg)
-                            val peerHeader = ByteArray(6).also { dis.readFully(it) }
-                            val peerBuf = ByteBuffer.wrap(peerHeader).order(ByteOrder.BIG_ENDIAN)
-                            assertEquals(1, peerBuf.get().toInt())
-                            assertEquals(AdbTransportClient.PACKET_TYPE_PEER_INFO.toInt(), peerBuf.get().toInt())
-                            val encPeerInfo = ByteArray(peerBuf.int).also { dis.readFully(it) }
-                            val decPeerInfo = serverCipher.decrypt(encPeerInfo)
-                            receivedClientPubKey = decPeerInfo.copyOfRange(1, 64).decodeToString()
-
-                            val serverPeerInfo = serverCipher.encrypt(
-                                AdbPairingCipher.buildPeerInfoPayload(serverKeys.buildAdbPublicKeyPayload("adbd@dev")),
-                            )
-                            val replyFrame = ByteBuffer.allocate(6 + serverPeerInfo.size)
-                                .order(ByteOrder.BIG_ENDIAN)
-                                .put(1.toByte())
-                                .put(AdbTransportClient.PACKET_TYPE_PEER_INFO)
-                                .putInt(serverPeerInfo.size)
-                                .put(serverPeerInfo)
-                                .array()
-                            out.write(replyFrame)
-                            out.flush()
-                            doneLatch.await(3, TimeUnit.SECONDS)
-                        }
-                    }.onFailure { serverErr.set(it) }
-                }
-
-                try {
-                    client.pairWithLocalDaemon("127.0.0.1", pairingServer.localPort, "619402")
-                } finally {
-                    doneLatch.countDown()
-                    serverThread.join(5_000L)
-                }
-                serverErr.get()?.let { throw AssertionError("Pairing server failed: $it", it) }
-                assertTrue(receivedClientPubKey.isNotBlank())
-            }
-
-            ServerSocket(0, 4, InetAddress.getByName("127.0.0.1")).use { connectServer ->
-                var verifiedClientCertSubject = ""
-                val doneLatch = CountDownLatch(1)
-                val serverErr = AtomicReference<Throwable?>(null)
-                val serverThread = thread {
-                    runCatching {
-                        connectServer.accept().use { raw ->
-                            val plainIn = raw.getInputStream()
-                            val plainOut = raw.getOutputStream()
-                            val cnxn = AdbPacket.readFrom(plainIn)
-                            assertEquals(AdbPacket.CMD_CNXN, cnxn.command)
-
-                            AdbPacket(AdbPacket.CMD_STLS, AdbPacket.STLS_VERSION, 0).writeTo(plainOut)
-                            val stlsReply = AdbPacket.readFrom(plainIn)
-                            assertEquals(AdbPacket.CMD_STLS, stlsReply.command)
-
-                            val tls = serverSslContext.socketFactory
-                                .createSocket(raw, "127.0.0.1", connectServer.localPort, true) as SSLSocket
-                            tls.use { tlsSock ->
-                                tlsSock.useClientMode = false
-                                tlsSock.needClientAuth = true
-                                tlsSock.enabledProtocols = arrayOf("TLSv1.3")
-                                tlsSock.startHandshake()
-                                verifiedClientCertSubject = tlsSock.session.peerCertificates.first().toString()
-
-                                val tlsIn = tlsSock.inputStream
-                                val tlsOut = tlsSock.outputStream
-                                AdbPacket(AdbPacket.CMD_CNXN, AdbPacket.ADB_VERSION, AdbPacket.MAX_PAYLOAD)
-                                    .writeTo(tlsOut)
-
-                                val open = AdbPacket.readFrom(tlsIn)
-                                assertEquals(AdbPacket.CMD_OPEN, open.command)
-                                AdbPacket(AdbPacket.CMD_OKAY, 77, open.arg0).writeTo(tlsOut)
-                                AdbPacket(
-                                    AdbPacket.CMD_WRTE,
-                                    77,
-                                    open.arg0,
-                                    "uid=2000(shell)\n".encodeToByteArray(),
-                                ).writeTo(tlsOut)
-                                AdbPacket.readFrom(tlsIn)
-                                AdbPacket(AdbPacket.CMD_CLSE, 77, open.arg0).writeTo(tlsOut)
-                                doneLatch.await(3, TimeUnit.SECONDS)
-                            }
-                        }
-                    }.onFailure { serverErr.set(it) }
-                }
-
-                val out = try {
-                    client.executeOneShotShell("127.0.0.1", connectServer.localPort, "id")
-                } finally {
-                    doneLatch.countDown()
-                    serverThread.join(5_000L)
-                }
-                serverErr.get()?.let { throw AssertionError("STLS server failed: $it", it) }
-                assertEquals("uid=2000(shell)\n", out)
-                assertTrue(verifiedClientCertSubject.contains("Routine Local ADB"))
-            }
+            verifyPairingOverTls13(client, serverKeys, serverSslContext, deterministicExported)
+            verifyStlsMutualTlsShell(client, serverSslContext)
         } finally {
             if (robolectricBc != null && Security.getProvider("BC") == null) {
                 Security.addProvider(robolectricBc)
             }
+        }
+    }
+
+    private fun verifyPairingOverTls13(
+        client: AdbTransportClient,
+        serverKeys: AdbRsaKeyManager,
+        serverSslContext: SSLContext,
+        deterministicExported: ByteArray,
+    ) {
+        val sslServer = serverSslContext.serverSocketFactory
+            .createServerSocket(0, 4, InetAddress.getByName("127.0.0.1")) as SSLServerSocket
+        sslServer.enabledProtocols = arrayOf("TLSv1.3")
+        sslServer.use { pairingServer ->
+            var receivedClientPubKey = ""
+            val doneLatch = CountDownLatch(1)
+            val serverErr = AtomicReference<Throwable?>(null)
+            val serverThread = thread {
+                runCatching {
+                    (pairingServer.accept() as SSLSocket).use { tls ->
+                        tls.enabledProtocols = arrayOf("TLSv1.3")
+                        tls.startHandshake()
+                        val dis = DataInputStream(tls.inputStream)
+                        val out = tls.outputStream
+
+                        val clientMsgHeader = ByteArray(6).also { dis.readFully(it) }
+                        val msgBuf = ByteBuffer.wrap(clientMsgHeader).order(ByteOrder.BIG_ENDIAN)
+                        assertEquals(1, msgBuf.get().toInt())
+                        assertEquals(AdbTransportClient.PACKET_TYPE_SPAKE2_MSG.toInt(), msgBuf.get().toInt())
+                        val clientSpakeMsg = ByteArray(msgBuf.int).also { dis.readFully(it) }
+
+                        val serverSecret = "619402".encodeToByteArray() + deterministicExported
+                        val bob = AdbSpake2Session(AdbSpake2Session.Role.SERVER, serverSecret)
+                        val serverMsgFrame = ByteBuffer.allocate(6 + bob.publicMessage.size)
+                            .order(ByteOrder.BIG_ENDIAN)
+                            .put(1.toByte())
+                            .put(AdbTransportClient.PACKET_TYPE_SPAKE2_MSG)
+                            .putInt(bob.publicMessage.size)
+                            .put(bob.publicMessage)
+                            .array()
+                        out.write(serverMsgFrame)
+                        out.flush()
+
+                        val serverCipher = bob.processPeerMessage(clientSpakeMsg)
+                        val peerHeader = ByteArray(6).also { dis.readFully(it) }
+                        val peerBuf = ByteBuffer.wrap(peerHeader).order(ByteOrder.BIG_ENDIAN)
+                        assertEquals(1, peerBuf.get().toInt())
+                        assertEquals(AdbTransportClient.PACKET_TYPE_PEER_INFO.toInt(), peerBuf.get().toInt())
+                        val encPeerInfo = ByteArray(peerBuf.int).also { dis.readFully(it) }
+                        val decPeerInfo = serverCipher.decrypt(encPeerInfo)
+                        receivedClientPubKey = decPeerInfo.copyOfRange(1, 64).decodeToString()
+
+                        val serverPeerInfo = serverCipher.encrypt(
+                            AdbPairingCipher.buildPeerInfoPayload(serverKeys.buildAdbPublicKeyPayload("adbd@dev")),
+                        )
+                        val replyFrame = ByteBuffer.allocate(6 + serverPeerInfo.size)
+                            .order(ByteOrder.BIG_ENDIAN)
+                            .put(1.toByte())
+                            .put(AdbTransportClient.PACKET_TYPE_PEER_INFO)
+                            .putInt(serverPeerInfo.size)
+                            .put(serverPeerInfo)
+                            .array()
+                        out.write(replyFrame)
+                        out.flush()
+                        doneLatch.await(3, TimeUnit.SECONDS)
+                    }
+                }.onFailure { serverErr.set(it) }
+            }
+
+            try {
+                client.pairWithLocalDaemon("127.0.0.1", pairingServer.localPort, "619402")
+            } finally {
+                doneLatch.countDown()
+                serverThread.join(5_000L)
+            }
+            serverErr.get()?.let { throw AssertionError("Pairing server failed: $it", it) }
+            assertTrue(receivedClientPubKey.isNotBlank())
+        }
+    }
+
+    private fun verifyStlsMutualTlsShell(client: AdbTransportClient, serverSslContext: SSLContext) {
+        ServerSocket(0, 4, InetAddress.getByName("127.0.0.1")).use { connectServer ->
+            var verifiedClientCertSubject = ""
+            val doneLatch = CountDownLatch(1)
+            val serverErr = AtomicReference<Throwable?>(null)
+            val serverThread = thread {
+                runCatching {
+                    connectServer.accept().use { raw ->
+                        val plainIn = raw.getInputStream()
+                        val plainOut = raw.getOutputStream()
+                        val cnxn = AdbPacket.readFrom(plainIn)
+                        assertEquals(AdbPacket.CMD_CNXN, cnxn.command)
+
+                        AdbPacket(AdbPacket.CMD_STLS, AdbPacket.STLS_VERSION, 0).writeTo(plainOut)
+                        val stlsReply = AdbPacket.readFrom(plainIn)
+                        assertEquals(AdbPacket.CMD_STLS, stlsReply.command)
+
+                        val tls = serverSslContext.socketFactory
+                            .createSocket(raw, "127.0.0.1", connectServer.localPort, true) as SSLSocket
+                        tls.use { tlsSock ->
+                            tlsSock.useClientMode = false
+                            tlsSock.needClientAuth = true
+                            tlsSock.enabledProtocols = arrayOf("TLSv1.3")
+                            tlsSock.startHandshake()
+                            verifiedClientCertSubject = tlsSock.session.peerCertificates.first().toString()
+
+                            val tlsIn = tlsSock.inputStream
+                            val tlsOut = tlsSock.outputStream
+                            AdbPacket(AdbPacket.CMD_CNXN, AdbPacket.ADB_VERSION, AdbPacket.MAX_PAYLOAD)
+                                .writeTo(tlsOut)
+
+                            val open = AdbPacket.readFrom(tlsIn)
+                            assertEquals(AdbPacket.CMD_OPEN, open.command)
+                            AdbPacket(AdbPacket.CMD_OKAY, 77, open.arg0).writeTo(tlsOut)
+                            AdbPacket(
+                                AdbPacket.CMD_WRTE,
+                                77,
+                                open.arg0,
+                                "uid=2000(shell)\n".encodeToByteArray(),
+                            ).writeTo(tlsOut)
+                            AdbPacket.readFrom(tlsIn)
+                            AdbPacket(AdbPacket.CMD_CLSE, 77, open.arg0).writeTo(tlsOut)
+                            doneLatch.await(3, TimeUnit.SECONDS)
+                        }
+                    }
+                }.onFailure { serverErr.set(it) }
+            }
+
+            val out = try {
+                client.executeOneShotShell("127.0.0.1", connectServer.localPort, "id")
+            } finally {
+                doneLatch.countDown()
+                serverThread.join(5_000L)
+            }
+            serverErr.get()?.let { throw AssertionError("STLS server failed: $it", it) }
+            assertEquals("uid=2000(shell)\n", out)
+            assertTrue(verifiedClientCertSubject.contains("Routine Local ADB"))
         }
     }
 

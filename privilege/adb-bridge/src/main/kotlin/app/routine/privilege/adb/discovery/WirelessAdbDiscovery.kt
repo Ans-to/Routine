@@ -113,18 +113,8 @@ class WirelessAdbDiscovery @Inject constructor(
         val resolveQueue = Channel<NsdServiceInfo>(Channel.BUFFERED)
         val workerJob = launch(Dispatchers.IO) {
             for (candidate in resolveQueue) {
-                val resolved = resolveWithRetry(nsdManager, candidate) ?: continue
-
-                @Suppress("DEPRECATION")
-                val localHost = selectDeviceLocalHost(resolved.host) ?: continue
-                if (resolved.port > 0) {
-                    trySend(
-                        DiscoveredAdbEndpoint(
-                            host = localHost,
-                            port = resolved.port,
-                            serviceName = resolved.serviceName.orEmpty(),
-                        ),
-                    )
+                resolveDiscoveredEndpoint(nsdManager, candidate)?.let { endpoint ->
+                    trySend(endpoint)
                 }
             }
         }
@@ -176,6 +166,25 @@ class WirelessAdbDiscovery @Inject constructor(
 
     fun observeConnectEndpoints(): Flow<DiscoveredAdbEndpoint> =
         observeEndpoints(AdbBridgeConstants.CONNECT_SERVICE_TYPE)
+
+    private suspend fun resolveDiscoveredEndpoint(
+        nsdManager: NsdManager,
+        candidate: NsdServiceInfo,
+    ): DiscoveredAdbEndpoint? {
+        val resolved = resolveWithRetry(nsdManager, candidate) ?: return null
+
+        @Suppress("DEPRECATION")
+        val localHost = selectDeviceLocalHost(resolved.host) ?: return null
+        return if (resolved.port > 0) {
+            DiscoveredAdbEndpoint(
+                host = localHost,
+                port = resolved.port,
+                serviceName = resolved.serviceName.orEmpty(),
+            )
+        } else {
+            null
+        }
+    }
 
     private suspend fun resolveWithRetry(nsdManager: NsdManager, info: NsdServiceInfo): NsdServiceInfo? {
         repeat(3) { attempt ->

@@ -1,8 +1,11 @@
 package app.routine.privilege.api
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -121,5 +124,41 @@ class PrivilegedEngineContractTest {
         assertEquals(39123, endpoint.port)
         assertEquals("127.0.0.1", endpoint.host)
         assertEquals("debug", endpoint.label)
+    }
+
+    @Test
+    fun `PrivilegeSetupCoordinator defaults and WirelessPairingStatus models fulfill contract`() = runTest {
+        val defaultStatus = WirelessPairingStatus()
+        assertEquals(WirelessPairingPhase.IDLE, defaultStatus.phase)
+        assertNull(defaultStatus.endpoint)
+        assertNull(defaultStatus.message)
+        assertEquals(6, WirelessPairingPhase.entries.size)
+
+        val ep = PairingEndpointInfo(host = "127.0.0.1", port = 41234, label = "adb")
+        val foundStatus = WirelessPairingStatus(
+            phase = WirelessPairingPhase.PORT_FOUND,
+            endpoint = ep,
+            message = "Port found",
+        )
+        assertEquals(WirelessPairingPhase.PORT_FOUND, foundStatus.phase)
+        assertEquals(ep, foundStatus.endpoint)
+        assertEquals("Port found", foundStatus.message)
+
+        val coordinator = object : PrivilegeSetupCoordinator {
+            override fun buildOneTimeAdbCommand(): String = "adb shell pm grant app.routine perm"
+            override fun copyOneTimeCommandToClipboard(): String = buildOneTimeAdbCommand()
+            override fun encodeQrMatrix(payload: String): Array<BooleanArray> = arrayOf(booleanArrayOf(true))
+            override fun observeWirelessPairingEndpoints(): Flow<PairingEndpointInfo> = emptyFlow()
+            override fun showPairingCodeNotification(host: String, port: Int) = Unit
+            override suspend fun pairWirelessAdb(host: String, port: Int, pairingCode: String) =
+                PrivilegeOperationResult.Succeeded("paired")
+        }
+
+        assertTrue(coordinator.isWirelessAdbSupported())
+        assertEquals(WirelessPairingPhase.IDLE, coordinator.observeWirelessPairingStatus().value.phase)
+        coordinator.startWirelessPairingScan()
+        coordinator.stopWirelessPairingScan()
+        val connectDefault = coordinator.tryConnectPairedWirelessAdb()
+        assertTrue(connectDefault is PrivilegeOperationResult.Failed)
     }
 }

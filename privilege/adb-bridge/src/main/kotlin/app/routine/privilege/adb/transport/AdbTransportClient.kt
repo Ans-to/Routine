@@ -217,18 +217,27 @@ class AdbTransportClient(
                     isTls = true
                 }
                 AdbPacket.CMD_AUTH -> {
-                    if (!isTls) {
-                        if (sentSignature && abortOnUnauthorised) {
-                            throw IOException("ADB public key is not yet paired with local daemon.")
-                        }
-                        sendAuthResponse(pkt, sentSignature, output)
-                        sentSignature = true
-                    }
+                    sentSignature = handleAuthChallenge(pkt, isTls, sentSignature, abortOnUnauthorised, output)
                 }
                 else -> error("Unexpected packet during ADB handshake: 0x${pkt.command.toString(16)}")
             }
         }
         return input to output
+    }
+
+    private fun handleAuthChallenge(
+        pkt: AdbPacket,
+        isTls: Boolean,
+        sentSignature: Boolean,
+        abortOnUnauthorised: Boolean,
+        output: OutputStream,
+    ): Boolean {
+        if (isTls) return sentSignature
+        if (sentSignature && abortOnUnauthorised) {
+            throw IOException("ADB public key is not yet paired with local daemon.")
+        }
+        sendAuthResponse(pkt, sentSignature, output)
+        return true
     }
 
     private fun sendAuthResponse(pkt: AdbPacket, sentSignature: Boolean, output: OutputStream) {
