@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_rules_active_heading">Active Rules (%1$d)</string>
+    <string name="my_rules_inactive_heading">Inactive Rules (%1$d)</string>
+    <string name="my_rules_empty">No rules yet. Activate a template on the Home tab or tap + to create one.</string>
+    <string name="my_rules_new_fab">New Rule</string>
+    <string name="my_rules_last_triggered_never">Last triggered: Never</string>
+    <string name="my_rules_last_triggered_fmt">Last triggered: %1$s</string>
+    <string name="my_rules_circuit_tripped">Paused after %1$d consecutive failures</string>
+    <string name="my_rules_edit">Edit</string>
+    <string name="my_rules_run_now">Run</string>
+    <string name="my_rules_delete">Delete</string>
+
+    <string name="editor_title_new">New Rule</string>
+    <string name="editor_title_edit">Edit Rule</string>
+    <string name="editor_name_label">Rule Name</string>
+    <string name="editor_cooldown_label">Cooldown (seconds)</string>
+    <string name="editor_trigger_heading">1. When this happens (1 Trigger)</string>
+    <string name="editor_actions_heading">2. Do these steps (%1$d / 3 Actions)</string>
+    <string name="editor_add_action">Add Action Step</string>
+    <string name="editor_move_up">Up</string>
+    <string name="editor_move_down">Down</string>
+    <string name="editor_remove_action">Remove</string>
+    <string name="editor_test_rule">Test Rule (Dry Run)</string>
+    <string name="editor_save_rule">Save Rule</string>
+    <string name="editor_cancel">Cancel</string>
+    <string name="editor_dry_run_heading">Dry-Run Preview</string>
+
+    <string name="logs_search_placeholder">Filter logs by rule or message…</string>
+    <string name="logs_clear_button">Clear Logs</string>
+    <string name="logs_filter_all">All</string>
+    <string name="logs_empty">No execution logs match the current filter.</string>
+</resources>
