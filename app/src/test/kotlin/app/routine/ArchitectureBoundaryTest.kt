@@ -70,4 +70,41 @@ class ArchitectureBoundaryTest {
             violations.isEmpty(),
         )
     }
+
+    @Test
+    fun `public functions in engine, permissions, and privilege api document contract, failure modes, and safety`() {
+        val documentedDirs = listOf(
+            File(repoRoot, "core/engine/src/main"),
+            File(repoRoot, "core/permissions/src/main"),
+            File(repoRoot, "privilege/api/src/main"),
+        )
+        val missingDocs = documentedDirs
+            .flatMap { root -> root.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList() }
+            .flatMap { file -> findUndocumentedPublicFunctions(file) }
+
+        assertTrue(
+            "Public functions missing Contract/Failure modes/Thread safety KDoc:\n${missingDocs.joinToString("\n")}",
+            missingDocs.isEmpty(),
+        )
+    }
+
+    private fun findUndocumentedPublicFunctions(file: File): List<String> {
+        val publicFunRegex = Regex("""^\s*(?:override\s+|suspend\s+)*fun\s+([A-Za-z0-9_]+)\s*\(""")
+        val lines = file.readLines()
+        val missing = mutableListOf<String>()
+        for ((idx, line) in lines.withIndex()) {
+            if (line.contains("private ") || line.contains("internal ")) continue
+            val match = publicFunRegex.find(line) ?: continue
+            val nearHeader = lines.subList((idx - 5).coerceAtLeast(0), idx)
+            if (line.trimStart().startsWith("override ") && nearHeader.any { it.contains("object :") }) continue
+            val window = lines.subList((idx - 22).coerceAtLeast(0), idx).joinToString("\n")
+            val hasKdoc = window.contains("Contract:") &&
+                window.contains("Failure modes:") &&
+                window.contains("Thread safety:")
+            if (!hasKdoc) {
+                missing += "${file.relativeTo(repoRoot)}:${idx + 1} fun ${match.groupValues[1]}"
+            }
+        }
+        return missing
+    }
 }

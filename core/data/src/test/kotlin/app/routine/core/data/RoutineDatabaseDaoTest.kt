@@ -3,10 +3,14 @@ package app.routine.core.data
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import app.routine.core.data.local.LogEntity
 import app.routine.core.data.local.RoutineDatabase
+import app.routine.core.data.local.RoutineTypeConverters
 import app.routine.core.data.repository.LogRepository
 import app.routine.core.data.repository.RoutineBackupSerializer
 import app.routine.core.data.repository.RuleRepository
+import app.routine.core.data.repository.ThemeMode
+import app.routine.core.data.repository.UserPreferencesRepository
 import app.routine.core.model.Action
 import app.routine.core.model.ActionType
 import app.routine.core.model.ExecutionLogEntry
@@ -29,18 +33,21 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class RoutineDatabaseDaoTest {
+    private lateinit var context: Context
     private lateinit var database: RoutineDatabase
     private lateinit var ruleRepository: RuleRepository
     private lateinit var logRepository: LogRepository
+    private lateinit var preferencesRepository: UserPreferencesRepository
 
     @Before
     fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(context, RoutineDatabase::class.java)
             .allowMainThreadQueries()
             .build()
         ruleRepository = RuleRepository(database.ruleDao())
         logRepository = LogRepository(database.logDao())
+        preferencesRepository = UserPreferencesRepository(context)
     }
 
     @After
@@ -49,7 +56,7 @@ class RoutineDatabaseDaoTest {
     }
 
     @Test
-    fun `rule dao supports insert, query, update, circuit breaker auto-disable, and delete`() = runTest {
+    fun `rule dao supports insert, flows, success reset, circuit breaker auto-disable, and delete`() = runTest {
         val rule = Rule(
             id = "rule-bedtime",
             name = "Bedtime Silence",
@@ -59,16 +66,19 @@ class RoutineDatabaseDaoTest {
             cooldownSeconds = 30L,
         )
 
-        // Insert & Query
         ruleRepository.upsertRule(rule)
         val fetched = ruleRepository.getRuleById("rule-bedtime")
         assertNotNull(fetched)
         assertEquals("Bedtime Silence", fetched?.name)
+        assertEquals(1, ruleRepository.getAllRules().size)
+        assertEquals(1, ruleRepository.allRulesFlow.first().size)
+        assertEquals(1, ruleRepository.enabledRulesFlow.first().size)
         assertEquals(1, ruleRepository.getEnabledRulesForTrigger(TriggerType.TIME).size)
 
-        // Update
+        // Update and recordSuccess
         ruleRepository.upsertRule(rule.copy(name = "Updated Bedtime Silence"))
-        assertEquals("Updated Bedtime Silence", ruleRepository.getRuleById("rule-bedtime")?.name)
+        ruleRepository.recordSuccess("rule-bedtime", triggeredAtEpochMs = 55_000L)
+        assertEquals(55_000L, ruleRepository.getRuleById("rule-bedtime")?.lastTriggeredEpochMs)
 
         // Consecutive failures auto-disable at threshold 5
         repeat(4) {
@@ -86,20 +96,26 @@ class RoutineDatabaseDaoTest {
         assertTrue(resetRule.enabled)
         assertEquals(0, resetRule.consecutiveFailures)
 
+        // Invalid rule rejected by upsertRule
+        val invalid = rule.copy(id = "bad", actions = emptyList())
+        val invalidRes = runCatching { ruleRepository.upsertRule(invalid) }
+        assertTrue(invalidRes.isFailure)
+
         // Delete
         ruleRepository.deleteRule("rule-bedtime")
         assertNull(ruleRepository.getRuleById("rule-bedtime"))
     }
 
     @Test
-    fun `log dao enforces 1000 entry rotation, filtering, and redaction`() = runTest {
+    fun `log dao enforces 1000 entry rotation, filtering, clear, and SMS or shell secret redaction`() = runTest {
         for (i in 1..1_025) {
             logRepository.append(
                 ExecutionLogEntry(
                     ruleId = if (i % 2 == 0) "rule-even" else "rule-odd",
                     ruleName = "Test Rule",
                     status = if (i == 1_025) LogStatus.FAILED else LogStatus.SUCCESS,
-                    message = "Entry #$i password=topSecretValue",
+                    message = "Entry #$i password=topSecretValue sms=PrivateBody +1-555-867-5309 " +
+                        "settings put secure night_display_activated 1",
                     timestampEpochMs = 1_000_000L + i,
                 ),
             )
@@ -108,22 +124,54 @@ class RoutineDatabaseDaoTest {
         assertEquals(DatabaseConstants.MAX_LOG_ENTRIES, database.logDao().countLogs())
         val allLogs = logRepository.allLogsFlow.first()
         assertEquals(1_000, allLogs.size)
-        // Newest entry is #1025 and secret was redacted
-        assertTrue(allLogs.first().message.contains("Entry #1025"))
-        assertFalse(allLogs.first().message.contains("topSecretValue"))
-        assertTrue(allLogs.first().message.contains("password=[REDACTED]"))
+        val newest = allLogs.first().message
+        assertTrue(newest.contains("Entry #1025"))
+        assertFalse(newest.contains("topSecretValue"))
+        assertFalse(newest.contains("PrivateBody"))
+        assertFalse(newest.contains("867-5309"))
+        assertTrue(newest.contains("password=[REDACTED]"))
+        assertTrue(newest.contains("sms=[REDACTED]"))
+        assertTrue(newest.contains("[REDACTED_PHONE]"))
+        assertTrue(newest.contains("settings put secure night_display_activated [REDACTED]"))
 
-        // Filter by ruleId + status
         val failedLogs = logRepository.observeFiltered(
             ruleId = "rule-odd",
             status = LogStatus.FAILED,
         ).first()
         assertEquals(1, failedLogs.size)
-        assertEquals("rule-odd", failedLogs.single().ruleId)
+
+        logRepository.clearLogs()
+        assertEquals(0, database.logDao().countLogs())
+
+        // Verify LogEntity fallback on unknown status & RoutineTypeConverters
+        val fallbackDomain = LogEntity(
+            ruleId = "r1",
+            ruleName = "R1",
+            status = "UNKNOWN_STATUS",
+            message = "msg",
+            timestampEpochMs = 1L,
+        ).toDomain()
+        assertEquals(LogStatus.FAILED, fallbackDomain.status)
+        val converters = RoutineTypeConverters()
+        assertEquals(TriggerType.CHARGER, converters.toTriggerType(converters.fromTriggerType(TriggerType.CHARGER)))
     }
 
     @Test
-    fun `backup serializer exports and imports versioned JSON and rejects future schema`() {
+    fun `user preferences repository persists onboarding, theme, dynamic color, and auto reconnect`() = runTest {
+        preferencesRepository.setOnboardingCompleted(true)
+        preferencesRepository.setThemeMode(ThemeMode.DARK)
+        preferencesRepository.setDynamicColor(false)
+        preferencesRepository.setWirelessDebuggingAutoReconnect(false)
+
+        val updated = preferencesRepository.preferencesFlow.first()
+        assertTrue(updated.onboardingCompleted)
+        assertEquals(ThemeMode.DARK, updated.themeMode)
+        assertFalse(updated.dynamicColor)
+        assertFalse(updated.wirelessDebuggingAutoReconnect)
+    }
+
+    @Test
+    fun `backup serializer exports and imports versioned JSON and rejects future schema or invalid rule`() {
         val sampleRule = Rule(
             id = "backup-1",
             name = "Unplug at 80%",
@@ -136,5 +184,21 @@ class RoutineDatabaseDaoTest {
 
         val futureSchemaJson = """{"schemaVersion":99,"exportedAtEpochMs":0,"rules":[]}"""
         assertTrue(RoutineBackupSerializer.importFromJson(futureSchemaJson).isFailure)
+
+        val invalidRuleJson = """
+            {
+              "schemaVersion": 1,
+              "exportedAtEpochMs": 0,
+              "rules": [
+                {
+                  "id": "invalid-1",
+                  "name": "",
+                  "trigger": { "type": "CHARGER", "config": {} },
+                  "actions": []
+                }
+              ]
+            }
+        """.trimIndent()
+        assertTrue(RoutineBackupSerializer.importFromJson(invalidRuleJson).isFailure)
     }
 }

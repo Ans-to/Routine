@@ -13,12 +13,18 @@ object LogRedactor {
     private val shellInlineSecretRegex = Regex(
         """(?i)(--(?:password|token|secret|key|pin)\s+)(\S+)""",
     )
+    private val settingsPutSecretRegex = Regex(
+        """(?i)(\bsettings\s+put\s+(?:secure|global|system)\s+[A-Za-z0-9_.]+\s+)(\S+)""",
+    )
+    private val inputTextRegex = Regex(
+        """(?i)(\binput\s+text\s+)(\S+)""",
+    )
 
     /**
      * Redacts secret patterns from [rawText].
      *
-     * Contract: Replaces recognized secret values, credentials, SMS content markers, and phone numbers
-     * with `[REDACTED]` while preserving surrounding diagnostic structure.
+     * Contract: Replaces recognized secret values, credentials, SMS content markers, shell setting/text arguments,
+     * and phone numbers with `[REDACTED]` while preserving surrounding diagnostic structure.
      * Failure modes: Never throws; returns `[REDACTED]` fallback if regex evaluation encounters an error.
      * Thread safety: Stateless and completely thread-safe.
      */
@@ -27,6 +33,8 @@ object LogRedactor {
         return rawText
             .replace(bearerRegex, "Bearer [REDACTED]")
             .replace(shellInlineSecretRegex) { "${it.groupValues[1]}[REDACTED]" }
+            .replace(settingsPutSecretRegex) { "${it.groupValues[1]}[REDACTED]" }
+            .replace(inputTextRegex) { "${it.groupValues[1]}[REDACTED]" }
             .replace(keyValueSecretRegex) { "${it.groupValues[1]}${it.groupValues[2]}[REDACTED]" }
             .replace(phoneRegex, "[REDACTED_PHONE]")
     }
