@@ -62,7 +62,10 @@ private class StaticTemplateProvider(
  * Registry of all 20 built-in self-contained [TemplateProvider] definitions.
  */
 object BuiltInTemplateCatalog {
-    fun allProviders(): Set<TemplateProvider> = setOf(
+    fun allProviders(): Set<TemplateProvider> =
+        providersOneToSeven() + providersEightToFourteen() + providersFifteenToTwenty()
+
+    private fun providersOneToSeven(): Set<TemplateProvider> = setOf(
         StaticTemplateProvider(
             order = 1,
             id = "tpl_01_wifi_off_bedtime",
@@ -156,6 +159,9 @@ object BuiltInTemplateCatalog {
             ),
             cooldownSeconds = 1800L,
         ),
+    )
+
+    private fun providersEightToFourteen(): Set<TemplateProvider> = setOf(
         StaticTemplateProvider(
             order = 8,
             id = "tpl_08_open_app_work_wifi",
@@ -260,6 +266,9 @@ object BuiltInTemplateCatalog {
             ),
             cooldownSeconds = 3600L,
         ),
+    )
+
+    private fun providersFifteenToTwenty(): Set<TemplateProvider> = setOf(
         StaticTemplateProvider(
             order = 15,
             id = "tpl_15_music_on_headphones",

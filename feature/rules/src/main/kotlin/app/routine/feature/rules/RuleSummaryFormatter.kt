@@ -22,50 +22,55 @@ object RuleSummaryFormatter {
     fun formatTimestamp(epochMs: Long): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(epochMs))
 
-    fun summarizeTrigger(trigger: Trigger): String = when (trigger.type) {
-        TriggerType.TIME -> {
-            val h = (trigger.config["hour"]?.toIntOrNull() ?: 0).toString().padStart(2, '0')
-            val m = (trigger.config["minute"]?.toIntOrNull() ?: 0).toString().padStart(2, '0')
-            "At $h:$m"
+    fun summarizeTrigger(trigger: Trigger): String {
+        val cfg = trigger.config
+        return when (trigger.type) {
+            TriggerType.TIME -> "At ${cfg.twoDigit("hour")}:${cfg.twoDigit("minute")}"
+            TriggerType.BATTERY_LEVEL ->
+                "Battery ${cfg.opt("direction", "BELOW")} ${cfg.opt("thresholdPercent", "20")}%"
+            TriggerType.WIFI_SSID -> "Wi-Fi ${cfg.opt("transition", "CONNECTED")} (${cfg.opt("ssid", "Wi-Fi")})"
+            TriggerType.CHARGER -> "Charger ${cfg.opt("state", "CONNECTED")}"
+            TriggerType.BOOT_COMPLETED -> "Device boot completed"
+            TriggerType.BLUETOOTH_CONNECTED -> "Bluetooth ${cfg.opt("deviceCategory", "AUDIO")} connected"
+            TriggerType.CALENDAR_OR_MANUAL -> "Calendar / Manual (${cfg.opt("mode", "MANUAL")})"
+            TriggerType.PERIODIC_CHECK -> "Periodic ${cfg.opt("metric", "FREE_STORAGE_PERCENT")}"
+            TriggerType.LOCATION_GEOFENCE -> "Arrive at geofence"
+            TriggerType.APP_OPENED -> "App opened (${cfg.opt("packageNames", "app")})"
+            TriggerType.HOTSPOT_DURATION -> "Hotspot active ${cfg.opt("durationMinutes", "30")}m"
+            TriggerType.CALL_RECEIVED -> "Incoming unknown call"
+            TriggerType.ALARM_DISMISSED -> "Alarm dismissed"
         }
-        TriggerType.BATTERY_LEVEL -> {
-            val dir = trigger.config["direction"] ?: "BELOW"
-            val pct = trigger.config["thresholdPercent"] ?: "20"
-            "Battery $dir $pct%"
-        }
-        TriggerType.WIFI_SSID -> {
-            val tr = trigger.config["transition"] ?: "CONNECTED"
-            val ssid = trigger.config["ssid"] ?: "Wi-Fi"
-            "Wi-Fi $tr ($ssid)"
-        }
-        TriggerType.CHARGER -> "Charger ${trigger.config["state"] ?: "CONNECTED"}"
-        TriggerType.BOOT_COMPLETED -> "Device boot completed"
-        TriggerType.BLUETOOTH_CONNECTED -> "Bluetooth ${trigger.config["deviceCategory"] ?: "AUDIO"} connected"
-        TriggerType.CALENDAR_OR_MANUAL -> "Calendar / Manual (${trigger.config["mode"] ?: "MANUAL"})"
-        TriggerType.PERIODIC_CHECK -> "Periodic ${trigger.config["metric"] ?: "FREE_STORAGE_PERCENT"}"
-        TriggerType.LOCATION_GEOFENCE -> "Arrive at geofence"
-        TriggerType.APP_OPENED -> "App opened (${trigger.config["packageNames"] ?: "app"})"
-        TriggerType.HOTSPOT_DURATION -> "Hotspot active ${trigger.config["durationMinutes"] ?: "30"}m"
-        TriggerType.CALL_RECEIVED -> "Incoming unknown call"
-        TriggerType.ALARM_DISMISSED -> "Alarm dismissed"
     }
 
-    fun summarizeAction(action: Action): String = when (action.type) {
-        ActionType.NOTIFY -> "Notify '${action.config["title"] ?: "Alert"}'"
-        ActionType.TOAST -> "Toast '${action.config["message"] ?: "Done"}'"
-        ActionType.RINGER_MODE -> "Ringer ${action.config["mode"] ?: "SILENT"}"
-        ActionType.OPEN_APP -> "Open ${action.config["packageName"] ?: action.config["category"] ?: "App"}"
-        ActionType.OPEN_URL -> "Open URL"
-        ActionType.BRIGHTNESS -> "Brightness ${action.config["percent"] ?: "50"}%"
-        ActionType.DO_NOT_DISTURB -> "DND ${if (action.config["enabled"] == "false") "Off" else "On"}"
-        ActionType.SMS_AUTO_REPLY -> "SMS Auto-Reply"
-        ActionType.BATTERY_SAVER -> "Battery Saver"
-        ActionType.ROTATION_LOCK -> "Rotation Lock"
-        ActionType.SILENCE_UNKNOWN_CALLER -> "Silence Unknown Caller"
-        ActionType.SHELL_COMMAND -> "Shell Command"
-        ActionType.WIFI_TOGGLE -> "Wi-Fi ${if (action.config["enabled"] == "true") "On" else "Off"}"
-        ActionType.HOTSPOT_TOGGLE -> "Hotspot ${if (action.config["enabled"] == "true") "On" else "Off"}"
-        ActionType.SECURE_SETTING -> "Set ${action.config["key"] ?: "setting"}"
+    fun summarizeAction(action: Action): String {
+        val cfg = action.config
+        return when (action.type) {
+            ActionType.NOTIFY -> "Notify '${cfg.opt("title", "Alert")}'"
+            ActionType.TOAST -> "Toast '${cfg.opt("message", "Done")}'"
+            ActionType.RINGER_MODE -> "Ringer ${cfg.opt("mode", "SILENT")}"
+            ActionType.OPEN_APP -> "Open ${cfg.opt("packageName", cfg.opt("category", "App"))}"
+            ActionType.OPEN_URL -> "Open URL"
+            ActionType.BRIGHTNESS -> "Brightness ${cfg.opt("percent", "50")}%"
+            ActionType.DO_NOT_DISTURB -> "DND ${onOffLabel(cfg["enabled"], defaultOn = true)}"
+            ActionType.SMS_AUTO_REPLY -> "SMS Auto-Reply"
+            ActionType.BATTERY_SAVER -> "Battery Saver"
+            ActionType.ROTATION_LOCK -> "Rotation Lock"
+            ActionType.SILENCE_UNKNOWN_CALLER -> "Silence Unknown Caller"
+            ActionType.SHELL_COMMAND -> "Shell Command"
+            ActionType.WIFI_TOGGLE -> "Wi-Fi ${onOffLabel(cfg["enabled"], defaultOn = false)}"
+            ActionType.HOTSPOT_TOGGLE -> "Hotspot ${onOffLabel(cfg["enabled"], defaultOn = false)}"
+            ActionType.SECURE_SETTING -> "Set ${cfg.opt("key", "setting")}"
+        }
+    }
+
+    private fun Map<String, String>.opt(key: String, fallback: String): String = this[key] ?: fallback
+
+    private fun Map<String, String>.twoDigit(key: String): String =
+        (this[key]?.toIntOrNull() ?: 0).toString().padStart(2, '0')
+
+    private fun onOffLabel(raw: String?, defaultOn: Boolean): String {
+        val enabled = raw?.toBooleanStrictOrNull() ?: defaultOn
+        return if (enabled) "On" else "Off"
     }
 
     fun defaultTriggerConfig(type: TriggerType): Map<String, String> = when (type) {

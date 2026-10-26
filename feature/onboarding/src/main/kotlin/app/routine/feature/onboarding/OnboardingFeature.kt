@@ -90,7 +90,9 @@ object PermissionPromptCatalog {
             whyRes = R.string.perm_battery_why,
             fallbackRes = R.string.perm_battery_fallback,
         )
-        SystemPermission.NOTIFICATION_POLICY_ACCESS -> PermissionExplanationSpec(
+        SystemPermission.NOTIFICATION_POLICY_ACCESS,
+        SystemPermission.NOTIFICATION_LISTENER,
+        -> PermissionExplanationSpec(
             permission = permission,
             titleRes = R.string.perm_dnd_title,
             whyRes = R.string.perm_dnd_why,
@@ -185,6 +187,8 @@ object PermissionPromptCatalog {
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkgUri)
             SystemPermission.NOTIFICATION_POLICY_ACCESS ->
                 Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+            SystemPermission.NOTIFICATION_LISTENER ->
+                Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
             SystemPermission.WRITE_SYSTEM_SETTINGS ->
                 Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, pkgUri)
             SystemPermission.PACKAGE_USAGE_STATS ->
