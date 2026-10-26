@@ -110,10 +110,7 @@ interface LogDao {
     suspend fun pruneExcessLogs(maxEntries: Int = DatabaseConstants.MAX_LOG_ENTRIES)
 
     @Transaction
-    suspend fun insertWithRotation(
-        entity: LogEntity,
-        maxEntries: Int = DatabaseConstants.MAX_LOG_ENTRIES,
-    ): Long {
+    suspend fun insertWithRotation(entity: LogEntity, maxEntries: Int = DatabaseConstants.MAX_LOG_ENTRIES): Long {
         val id = insertRaw(entity)
         pruneExcessLogs(maxEntries)
         return id
