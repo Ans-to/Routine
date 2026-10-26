@@ -76,31 +76,31 @@ class PrivilegedActionExecutorsTest {
     }
 
     @Test
-    fun `hotspot, night light, screen timeout, secure setting, and shell executors run safely`() = runTest {
+    fun `hotspot, secure setting presets, and shell executors run safely`() = runTest {
         val engine = RecordingPrivilegedEngine(shellAvailable = true)
 
         val hotspot = HotspotToggleActionExecutor(engine)
         val hotspotOutcome = hotspot.execute(Action(ActionType.HOTSPOT_TOGGLE, mapOf("enabled" to "false")))
         assertTrue(hotspotOutcome is ActionExecutionOutcome.Success)
 
-        val nightLight = NightLightActionExecutor(engine)
-        val nightOutcome = nightLight.execute(Action(ActionType.NIGHT_LIGHT, mapOf("enabled" to "true")))
+        val secureSetting = SecureSettingActionExecutor(engine)
+        val nightOutcome = secureSetting.execute(
+            Action(
+                ActionType.SECURE_SETTING,
+                mapOf("namespace" to "SECURE", "key" to "night_display_activated", "value" to "1"),
+            ),
+        )
         assertTrue(nightOutcome is ActionExecutionOutcome.Success)
         assertEquals("1", engine.settingsWritten["SECURE:night_display_activated"])
 
-        val timeout = ScreenTimeoutActionExecutor(engine)
-        val timeoutOutcome = timeout.execute(Action(ActionType.SCREEN_TIMEOUT, mapOf("seconds" to "30")))
-        assertTrue(timeoutOutcome is ActionExecutionOutcome.Success)
-        assertEquals("30000", engine.settingsWritten["SYSTEM:screen_off_timeout"])
-
-        val writeSetting = WriteSecureSettingActionExecutor(engine)
-        val settingRes = writeSetting.execute(
+        val timeoutOutcome = secureSetting.execute(
             Action(
-                ActionType.WRITE_SECURE_SETTING,
-                mapOf("namespace" to "GLOBAL", "key" to "animator_duration_scale", "value" to "0.5"),
+                ActionType.SECURE_SETTING,
+                mapOf("namespace" to "SYSTEM", "key" to "screen_off_timeout", "value" to "30000"),
             ),
         )
-        assertTrue(settingRes is ActionExecutionOutcome.Success)
+        assertTrue(timeoutOutcome is ActionExecutionOutcome.Success)
+        assertEquals("30000", engine.settingsWritten["SYSTEM:screen_off_timeout"])
 
         val shell = ShellCommandActionExecutor(engine)
         val shellOutcome = shell.execute(Action(ActionType.SHELL_COMMAND, mapOf("command" to "input keyevent 85")))

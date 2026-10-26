@@ -84,66 +84,14 @@ class HotspotToggleActionExecutor @Inject constructor(
 }
 
 /**
- * Toggles Night Light (`night_display_activated`) via [PrivilegedEngine.writeSecureSetting].
+ * Writes validated settings (`night_display_activated`, `screen_off_timeout`, or custom safe keys)
+ * across `SECURE`, `GLOBAL`, and `SYSTEM` namespaces via [PrivilegedEngine.writeSecureSetting].
  */
 @Singleton
-class NightLightActionExecutor @Inject constructor(
+class SecureSettingActionExecutor @Inject constructor(
     private val privilegedEngine: PrivilegedEngine,
 ) : ActionExecutor {
-    override val supportedType: ActionType = ActionType.NIGHT_LIGHT
-
-    override suspend fun execute(action: Action, event: TriggerEvent?): ActionExecutionOutcome {
-        val enabled = action.config["enabled"]?.toBooleanStrictOrNull() ?: true
-        val targetValue = if (enabled) "1" else "0"
-        return when (
-            val res = privilegedEngine.writeSecureSetting(
-                SecureSettingNamespace.SECURE,
-                "night_display_activated",
-                targetValue,
-            )
-        ) {
-            is PrivilegeOperationResult.Succeeded -> ActionExecutionOutcome.Success("Set Night Light enabled=$enabled")
-            is PrivilegeOperationResult.Failed -> ActionExecutionOutcome.Failure(res.reason)
-        }
-    }
-}
-
-/**
- * Adjusts system screen-off timeout (`screen_off_timeout` in milliseconds) via [PrivilegedEngine].
- */
-@Singleton
-class ScreenTimeoutActionExecutor @Inject constructor(
-    private val privilegedEngine: PrivilegedEngine,
-) : ActionExecutor {
-    override val supportedType: ActionType = ActionType.SCREEN_TIMEOUT
-
-    override suspend fun execute(action: Action, event: TriggerEvent?): ActionExecutionOutcome {
-        val seconds = action.config["seconds"]?.toIntOrNull()
-        if (seconds == null || seconds !in 5..3600) {
-            return ActionExecutionOutcome.Failure("Screen timeout seconds must be between 5 and 3600.")
-        }
-        val millis = seconds * 1_000L
-        return when (
-            val res = privilegedEngine.writeSecureSetting(
-                SecureSettingNamespace.SYSTEM,
-                "screen_off_timeout",
-                millis.toString(),
-            )
-        ) {
-            is PrivilegeOperationResult.Succeeded -> ActionExecutionOutcome.Success("Set screen timeout to ${seconds}s")
-            is PrivilegeOperationResult.Failed -> ActionExecutionOutcome.Failure(res.reason)
-        }
-    }
-}
-
-/**
- * Writes an arbitrary safe key-value pair to `SECURE`, `GLOBAL`, or `SYSTEM` via [PrivilegedEngine].
- */
-@Singleton
-class WriteSecureSettingActionExecutor @Inject constructor(
-    private val privilegedEngine: PrivilegedEngine,
-) : ActionExecutor {
-    override val supportedType: ActionType = ActionType.WRITE_SECURE_SETTING
+    override val supportedType: ActionType = ActionType.SECURE_SETTING
 
     override suspend fun execute(action: Action, event: TriggerEvent?): ActionExecutionOutcome {
         val nsName = action.config["namespace"]?.uppercase() ?: "SECURE"
@@ -192,8 +140,7 @@ class ShellCommandActionExecutor @Inject constructor(
             Regex("\\breboot\\s+(bootloader|fastboot|recovery)\\b"),
         )
 
-        fun isDestructiveCommand(command: String): Boolean =
-            DESTRUCTIVE_PATTERNS.any { it.containsMatchIn(command) }
+        fun isDestructiveCommand(command: String): Boolean = DESTRUCTIVE_PATTERNS.any { it.containsMatchIn(command) }
     }
 }
 
@@ -217,15 +164,7 @@ abstract class PrivilegedActionsModule {
 
     @Binds
     @IntoSet
-    abstract fun bindNightLight(executor: NightLightActionExecutor): ActionExecutor
-
-    @Binds
-    @IntoSet
-    abstract fun bindScreenTimeout(executor: ScreenTimeoutActionExecutor): ActionExecutor
-
-    @Binds
-    @IntoSet
-    abstract fun bindWriteSecureSetting(executor: WriteSecureSettingActionExecutor): ActionExecutor
+    abstract fun bindSecureSetting(executor: SecureSettingActionExecutor): ActionExecutor
 
     @Binds
     @IntoSet
