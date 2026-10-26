@@ -33,11 +33,11 @@ Run the generator script to scaffold a new self-contained provider:
 
 ```bash
 python3 scripts/new_template.py \
-  --id tpl_21_desk_focus \
+  --id tpl_41_desk_focus \
   --class-name DeskFocusTemplateProvider \
   --title "Desk Focus Mode" \
   --description "Enable DND when connected to desk charger." \
-  --order 21 \
+  --order 41 \
   --trigger CHARGER \
   --action DO_NOT_DISTURB
 ```

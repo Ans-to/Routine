@@ -1,6 +1,6 @@
 Routine is a local-first, 100% self-contained Android automation app designed around clarity, privacy, and zero external companion apps.
 
-Pick any of 20 one-tap automation templates or build your own linear rule (1 trigger + up to 3 ordered actions) with live side-effect-free dry-run previews.
+Pick any of 40 one-tap automation templates or build your own linear rule (1 trigger + up to 3 ordered actions) with live side-effect-free dry-run previews.
 
 Key features:
 • Zero external apps required: No Shizuku, Tasker, Termux, or LADB needed.

@@ -8,7 +8,7 @@
 
 > **Automations for people who don't want to learn Tasker.**
 
-**Routine** is a local-first, **100% self-contained** Android automation app built with Kotlin, Coroutines/`Flow`, Hilt, SQLCipher Room, and Material 3 Jetpack Compose. Activate any of **20 built-in one-tap templates** or create a clean linear rule (**1 trigger + up to 3 ordered actions**) with live side-effect-free dry-run previews — **with zero external companion apps (no Shizuku, no Tasker, no Termux, no LADB), zero cloud sync, zero analytics, and zero `INTERNET` permission in the default build.**
+**Routine** is a local-first, **100% self-contained** Android automation app built with Kotlin, Coroutines/`Flow`, Hilt, SQLCipher Room, and Material 3 Jetpack Compose. Activate any of **40 built-in one-tap templates** or create a clean linear rule (**1 trigger + up to 3 ordered actions**) with live side-effect-free dry-run previews — **with zero external companion apps (no Shizuku, no Tasker, no Termux, no LADB), zero cloud sync, zero analytics, and zero `INTERNET` permission in the default build.**
 
 <p align="center">
   <img src="docs/assets/routine-demo.gif" alt="Routine 60-second walkthrough demo" width="380" />
@@ -39,7 +39,7 @@
 
 ---
 
-## 20 Built-In One-Tap Templates
+## 40 Built-In One-Tap Templates
 
 Adding a new template requires **zero changes** to `:core:engine` or Compose UI screens (see `scripts/new_template.py`).
 
@@ -49,10 +49,10 @@ Adding a new template requires **zero changes** to `:core:engine` or Compose UI 
 | 2 | **Enable DND during meetings** | `CALENDAR_OR_MANUAL` (`CALENDAR_BUSY`) | `DO_NOT_DISTURB` (`on`) | Standard + DND |
 | 3 | **Auto-reply SMS when driving** | `BLUETOOTH_CONNECTED` (`CAR`) | `SMS_AUTO_REPLY` | Standard + BT/SMS |
 | 4 | **Mobile data limit alert** | `PERIODIC_CHECK` (`MOBILE_DATA_MB >= 5000`) | `NOTIFY` | Standard + Usage |
-| 5 | **Battery saver below 20%** | `BATTERY_LEVEL` (`BELOW 20%`) | `BATTERY_SAVER` | Standard |
+| 5 | **Battery saver below 20%** | `BATTERY_LEVEL` (`BELOW 20%`) | `BATTERY_SAVER` | Ready (Zero Setup) |
 | 6 | **Bedtime mode** | `TIME` (22:30) | `DO_NOT_DISTURB` + `BRIGHTNESS` (`15%`) | Standard + DND/Display |
 | 7 | **Unplug charger at 80%** | `BATTERY_LEVEL` (`ABOVE 80%`, charging) | `NOTIFY` | Standard |
-| 8 | **Open app on work Wi-Fi** | `WIFI_SSID` (`CONNECTED`) | `OPEN_APP` | Standard + Wi-Fi/Location |
+| 8 | **Open app on work Wi-Fi** | `WIFI_SSID` (`OfficeWiFi` `CONNECTED`) | `OPEN_APP` (`NEWS`) | Standard + Wi-Fi/Location |
 | 9 | **Silence phone at cinema/mosque** | `LOCATION_GEOFENCE` (`ENTER`) | `RINGER_MODE` (`SILENT`) | Standard + Geofence |
 | 10 | **Morning briefing on charger** | `TIME` (07:30, charging) | `OPEN_APP` (`NEWS`) + `NOTIFY` | Standard |
 | 11 | **Lock rotation for video apps** | `APP_OPENED` (VLC / YouTube) | `ROTATION_LOCK` (`locked`) | Optional Accessibility |
@@ -60,11 +60,31 @@ Adding a new template requires **zero changes** to `:core:engine` or Compose UI 
 | 13 | **Auto-disable hotspot after 30m** | `HOTSPOT_DURATION` (`30m`) | `HOTSPOT_TOGGLE` (`off`) | Privileged |
 | 14 | **Low free storage alert** | `PERIODIC_CHECK` (`FREE_STORAGE_PERCENT <= 10%`) | `NOTIFY` | Standard |
 | 15 | **Launch music on headphones** | `BLUETOOTH_CONNECTED` (`AUDIO`) | `OPEN_APP` (`MUSIC`) | Standard + BT |
-| 16 | **Turn off Wi-Fi leaving home** | `WIFI_SSID` (`DISCONNECTED`) | `WIFI_TOGGLE` (`off`) | Privileged |
+| 16 | **Turn off Wi-Fi leaving home** | `WIFI_SSID` (`HomeWiFi` `DISCONNECTED`) | `WIFI_TOGGLE` (`off`) | Privileged |
 | 17 | **Shorten screen timeout per app** | `APP_OPENED` | `SECURE_SETTING` (`screen_off_timeout=15000`) | Privileged + Accessibility |
 | 18 | **Weekly photo backup reminder** | `TIME` (`SUN` 18:00) | `NOTIFY` | Standard |
 | 19 | **Silence unknown callers** | `CALL_RECEIVED` (`unknownOnly=true`) | `SILENCE_UNKNOWN_CALLER` | Standard + CallScreening |
 | 20 | **Morning summary on alarm dismissed** | `ALARM_DISMISSED` | `NOTIFY` | Standard |
+| 21 | **Morning unplug reset** | `CHARGER` (`DISCONNECTED`) | `DO_NOT_DISTURB` (`off`) + `RINGER_MODE` (`NORMAL`) + `BRIGHTNESS` (`65%`) | Standard + DND/Display |
+| 22 | **Wi-Fi on in the morning** | `TIME` (07:00) | `WIFI_TOGGLE` (`on`) | Privileged |
+| 23 | **Night Light off at sunrise** | `TIME` (07:00) | `SECURE_SETTING` (`night_display_activated=0`) | Privileged (Option B/A) |
+| 24 | **Restore ringer leaving venue** | `LOCATION_GEOFENCE` (`EXIT`) | `DO_NOT_DISTURB` (`off`) + `RINGER_MODE` (`NORMAL`) | Standard + Geofence |
+| 25 | **Vibrate on office Wi-Fi** | `WIFI_SSID` (`OfficeWiFi` `CONNECTED`) | `RINGER_MODE` (`VIBRATE`) | Standard + Wi-Fi/DND |
+| 26 | **Unwind leaving office Wi-Fi** | `WIFI_SSID` (`OfficeWiFi` `DISCONNECTED`) | `DO_NOT_DISTURB` (`off`) + `RINGER_MODE` (`NORMAL`) | Standard + Wi-Fi/DND |
+| 27 | **Arrive home comfort mode** | `WIFI_SSID` (`HomeWiFi` `CONNECTED`) | `DO_NOT_DISTURB` (`off`) + `RINGER_MODE` (`NORMAL`) + `ROTATION_LOCK` (`unlocked`) | Standard + Wi-Fi/Display |
+| 28 | **Car navigation cockpit** | `BLUETOOTH_CONNECTED` (`CAR`) | `BRIGHTNESS` (`85%`) + `ROTATION_LOCK` (`unlocked`) + `OPEN_URL` (`geo:0,0`) | Standard + BT/Display |
+| 29 | **Encrypted DNS leaving home** | `WIFI_SSID` (`HomeWiFi` `DISCONNECTED`) | `SECURE_SETTING` (`private_dns_mode=hostname`) | Privileged (Option B/A) |
+| 30 | **Local DNS on home Wi-Fi** | `WIFI_SSID` (`HomeWiFi` `CONNECTED`) | `SECURE_SETTING` (`private_dns_mode=opportunistic`) | Privileged (Option B/A) |
+| 31 | **Lock USB debugging on plug-in** | `CHARGER` (`CONNECTED`) | `SECURE_SETTING` (`adb_enabled=0`) | Privileged (Option B/A) |
+| 32 | **Post-reboot check-in** | `BOOT_COMPLETED` | `NOTIFY` | Standard |
+| 33 | **Grayscale on social apps** | `APP_OPENED` (Social / short-video apps) | `SECURE_SETTING` (`daltonizer=0` + `daltonizer_enabled=1`) | Privileged + Accessibility |
+| 34 | **Full color in the morning** | `TIME` (07:00) | `SECURE_SETTING` (`accessibility_display_daltonizer_enabled=0`) | Privileged (Option B/A) |
+| 35 | **System dark theme at night** | `TIME` (20:00) | `SECURE_SETTING` (`ui_night_mode=2`) | Privileged (Option B/A) |
+| 36 | **System light theme in morning** | `TIME` (07:00) | `SECURE_SETTING` (`ui_night_mode=1`) | Privileged (Option B/A) |
+| 37 | **E-book reading focus** | `APP_OPENED` (KOReader / Librera / ReadEra / Kindle) | `DO_NOT_DISTURB` (`on`) + `ROTATION_LOCK` (`locked`) + `BRIGHTNESS` (`35%`) | Optional Accessibility |
+| 38 | **Camera outdoor boost** | `APP_OPENED` (GrapheneOS / Fossify / OpenCamera / Pixel) | `BRIGHTNESS` (`90%`) + `ROTATION_LOCK` (`unlocked`) | Optional Accessibility |
+| 39 | **Critical 10% battery survival** | `BATTERY_LEVEL` (`BELOW 10%`) | `BRIGHTNESS` (`10%`) + `RINGER_MODE` (`VIBRATE`) + `BATTERY_SAVER` | Standard + Display/DND |
+| 40 | **Wake-up music after alarm** | `ALARM_DISMISSED` | `OPEN_APP` (`MUSIC`) | Ready (Zero Setup) |
 
 ---
 
@@ -85,7 +105,7 @@ Routine **never** requests permissions silently — every permission prompt or S
 | `SEND_SMS` | Standard | Optional direct SMS auto-reply | Default `INTENT` mode pre-fills SMS app without `SEND_SMS` |
 | `PACKAGE_USAGE_STATS` | Standard | Monthly mobile data check | Falls back to `TrafficStats` counters |
 | `READ_CONTACTS` / `ROLE_CALL_SCREENING` | Standard | Silence non-contact callers | Inactive until user opts in |
-| `BIND_ACCESSIBILITY_SERVICE` | Optional | Foreground package name detection (`canRetrieveWindowContent=false`) | Only used for templates #11 & #17; zero UI scraping/tapping |
+| `BIND_ACCESSIBILITY_SERVICE` | Optional | Foreground package name detection (`canRetrieveWindowContent=false`) | Only used for `APP_OPENED` templates; zero UI scraping/tapping |
 | `WRITE_SECURE_SETTINGS` | Privileged | Direct secure/global setting toggles | Grey `Privileged` badge with setup wizard |
 | `INTERNET` | **`wirelessAdb` flavor only** | Loopback `127.0.0.1` ADB pairing socket | **Completely absent from default `offline` APK** |
 
