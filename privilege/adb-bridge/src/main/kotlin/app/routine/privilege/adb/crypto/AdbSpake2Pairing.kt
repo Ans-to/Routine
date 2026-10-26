@@ -148,7 +148,7 @@ internal object Ed25519Math {
         .add(BigInteger("27742317777372353535851937790883648493"))
 
     private val TWO = BigInteger.valueOf(2)
-    private val P_MINUS_5_DIV_8 = PRIME_P.subtract(BigInteger.valueOf(5)).shiftRight(3)
+    private val P_PLUS_3_DIV_8 = PRIME_P.add(BigInteger.valueOf(3)).shiftRight(3)
     private val SQRT_MINUS_ONE = TWO.modPow(PRIME_P.subtract(BigInteger.ONE).shiftRight(2), PRIME_P)
     val D_CONST: BigInteger = BigInteger.valueOf(-121665)
         .mod(PRIME_P)
@@ -306,7 +306,7 @@ internal object Ed25519Math {
         if (x2 == BigInteger.ZERO) {
             return if (signBit == 0) BigInteger.ZERO else null
         }
-        var x = x2.modPow(P_MINUS_5_DIV_8, PRIME_P)
+        var x = x2.modPow(P_PLUS_3_DIV_8, PRIME_P)
         if (x.multiply(x).mod(PRIME_P) != x2) {
             x = x.multiply(SQRT_MINUS_ONE).mod(PRIME_P)
         }

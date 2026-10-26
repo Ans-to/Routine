@@ -41,10 +41,7 @@ interface PrivilegedEngine {
      * without shell access) as [ShellCommandResult.Failed]; propagates coroutine cancellation.
      * Thread safety: Safe for concurrent invocation across arbitrary coroutine dispatchers.
      */
-    suspend fun executeShellCommand(
-        command: String,
-        timeoutMs: Long = DEFAULT_SHELL_TIMEOUT_MS,
-    ): ShellCommandResult
+    suspend fun executeShellCommand(command: String, timeoutMs: Long = DEFAULT_SHELL_TIMEOUT_MS): ShellCommandResult
 
     /**
      * Grants an Android runtime or development [permission] to [packageName].
