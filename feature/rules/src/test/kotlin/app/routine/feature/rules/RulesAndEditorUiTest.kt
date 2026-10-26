@@ -5,10 +5,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import app.routine.core.engine.ActionExecutionOutcome
 import app.routine.core.engine.ActionExecutor
 import app.routine.core.engine.MapActionExecutorRegistry
@@ -116,8 +117,9 @@ class RulesAndEditorUiTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("editor_test_rule_button").performScrollTo().performClick()
-        composeTestRule.onNodeWithTag("editor_dry_run_banner").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("editor_test_rule_button").performClick()
+        composeTestRule.onNodeWithTag("editor_list").performScrollToNode(hasTestTag("editor_dry_run_banner"))
+        composeTestRule.onNodeWithTag("editor_dry_run_banner").assertIsDisplayed()
 
         assertFalse("Dry run must never execute real side effects", realExecuteCalled)
         assertEquals(1, recordedLogs.size)

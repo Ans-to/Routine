@@ -17,6 +17,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -162,121 +163,12 @@ fun RuleEditorContent(
         cooldownSeconds = cooldownText.toLongOrNull()?.coerceAtLeast(0L) ?: 0L,
     )
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            val headingRes = if (initialRule == null) R.string.editor_title_new else R.string.editor_title_edit
-            Text(
-                text = stringResource(headingRes),
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(stringResource(R.string.editor_name_label)) },
-                singleLine = true,
+    Scaffold(
+        bottomBar = {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("editor_rule_name"),
-            )
-            OutlinedTextField(
-                value = cooldownText,
-                onValueChange = { cooldownText = it },
-                label = { Text(stringResource(R.string.editor_cooldown_label)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        item {
-            TriggerSelectorSection(
-                trigger = trigger,
-                onTriggerChange = { trigger = it },
-            )
-        }
-
-        item {
-            Text(
-                text = stringResource(R.string.editor_actions_heading, actions.size),
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-
-        itemsIndexed(actions) { idx, action ->
-            ActionStepEditorCard(
-                index = idx,
-                totalCount = actions.size,
-                action = action,
-                onUpdate = { updated ->
-                    actions = actions.toMutableList().also { it[idx] = updated }
-                },
-                onMoveUp = {
-                    if (idx > 0) {
-                        actions = actions.toMutableList().also { list ->
-                            val tmp = list[idx - 1]
-                            list[idx - 1] = list[idx]
-                            list[idx] = tmp
-                        }
-                    }
-                },
-                onMoveDown = {
-                    if (idx < actions.lastIndex) {
-                        actions = actions.toMutableList().also { list ->
-                            val tmp = list[idx + 1]
-                            list[idx + 1] = list[idx]
-                            list[idx] = tmp
-                        }
-                    }
-                },
-                onRemove = {
-                    if (actions.size > 1) {
-                        actions = actions.toMutableList().also { it.removeAt(idx) }
-                    }
-                },
-            )
-        }
-
-        item {
-            if (actions.size < Rule.MAX_ACTIONS) {
-                OutlinedButton(
-                    onClick = {
-                        actions = actions + Action(
-                            type = ActionType.NOTIFY,
-                            config = RuleSummaryFormatter.defaultActionConfig(ActionType.NOTIFY),
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.editor_add_action))
-                }
-            }
-        }
-
-        if (dryRunSummary != null) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("editor_dry_run_banner"),
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = stringResource(R.string.editor_dry_run_heading),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(text = dryRunSummary, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TextButton(onClick = onCancel) {
@@ -293,6 +185,125 @@ fun RuleEditorContent(
                     modifier = Modifier.testTag("editor_save_rule_button"),
                 ) {
                     Text(stringResource(R.string.editor_save_rule))
+                }
+            }
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .testTag("editor_list"),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (dryRunSummary != null) {
+                item(key = "dry_run_banner") {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("editor_dry_run_banner"),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.editor_dry_run_heading),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(text = dryRunSummary, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
+            item {
+                val headingRes = if (initialRule == null) R.string.editor_title_new else R.string.editor_title_edit
+                Text(
+                    text = stringResource(headingRes),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.editor_name_label)) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("editor_rule_name"),
+                )
+                OutlinedTextField(
+                    value = cooldownText,
+                    onValueChange = { cooldownText = it },
+                    label = { Text(stringResource(R.string.editor_cooldown_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            item {
+                TriggerSelectorSection(
+                    trigger = trigger,
+                    onTriggerChange = { trigger = it },
+                )
+            }
+
+            item {
+                Text(
+                    text = stringResource(R.string.editor_actions_heading, actions.size),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+
+            itemsIndexed(actions) { idx, action ->
+                ActionStepEditorCard(
+                    index = idx,
+                    totalCount = actions.size,
+                    action = action,
+                    onUpdate = { updated ->
+                        actions = actions.toMutableList().also { it[idx] = updated }
+                    },
+                    onMoveUp = {
+                        if (idx > 0) {
+                            actions = actions.toMutableList().also { list ->
+                                val tmp = list[idx - 1]
+                                list[idx - 1] = list[idx]
+                                list[idx] = tmp
+                            }
+                        }
+                    },
+                    onMoveDown = {
+                        if (idx < actions.lastIndex) {
+                            actions = actions.toMutableList().also { list ->
+                                val tmp = list[idx + 1]
+                                list[idx + 1] = list[idx]
+                                list[idx] = tmp
+                            }
+                        }
+                    },
+                    onRemove = {
+                        if (actions.size > 1) {
+                            actions = actions.toMutableList().also { it.removeAt(idx) }
+                        }
+                    },
+                )
+            }
+
+            item {
+                if (actions.size < Rule.MAX_ACTIONS) {
+                    OutlinedButton(
+                        onClick = {
+                            actions = actions + Action(
+                                type = ActionType.NOTIFY,
+                                config = RuleSummaryFormatter.defaultActionConfig(ActionType.NOTIFY),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.editor_add_action))
+                    }
                 }
             }
         }
