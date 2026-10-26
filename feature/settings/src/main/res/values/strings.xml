@@ -14,15 +14,16 @@
     <string name="settings_toggle_qr_hide">Hide Command QR</string>
 
     <string name="settings_opt_a_title">Option A — Built-in Wireless Debugging Bridge (No PC)</string>
-    <string name="settings_opt_a_steps">1. Open Developer Options and enable Wireless Debugging.\n2. Tap Scan for Pairing Port below, then open Pair device with pairing code.\n3. Enter the 6-digit code in Routine\'s notification or below.</string>
+    <string name="settings_opt_a_steps">1. Tap Start Pairing &amp; Open Developer Options below.\n2. Enable Wireless Debugging, then tap Pair device with pairing code.\n3. Keep that dialog open! Pull down the notification shade and enter the 6-digit code in Routine\'s notification.</string>
     <string name="settings_opt_a_offline_notice">You have the strict zero-INTERNET Offline APK installed. Android requires INTERNET permission for local 127.0.0.1 Wireless Debugging &amp; mDNS discovery — install Routine-v0.1.0-alpha-wirelessAdb.apk for on-device Option A pairing, or use Option B (One-Time ADB Grant) above.</string>
-    <string name="settings_open_dev_options">Open Developer Options</string>
-    <string name="settings_scan_ports_start">Scan for Pairing Port</string>
-    <string name="settings_scan_ports_stop">Stop Port Scan</string>
-    <string name="settings_endpoint_found">Detected pairing port: %1$s:%2$d</string>
-    <string name="settings_endpoint_waiting">Waiting for Wireless Debugging pairing dialog…</string>
-    <string name="settings_send_pair_notification">Post Shade Pairing Prompt</string>
-    <string name="settings_pairing_code_label">6-Digit Pairing Code</string>
+    <string name="settings_open_dev_options">Start Pairing &amp; Open Dev Options</string>
+    <string name="settings_scan_ports_start">Start Background Scan</string>
+    <string name="settings_scan_ports_stop">Stop Background Scan</string>
+    <string name="settings_connect_paired">Connect Paired Wireless ADB</string>
+    <string name="settings_endpoint_found">Detected pairing port: %1$s:%2$d (notification posted in shade)</string>
+    <string name="settings_endpoint_waiting">Scanning in background… Open Wireless debugging → Pair device with pairing code.</string>
+    <string name="settings_send_pair_notification">Re-post Shade Pairing Prompt</string>
+    <string name="settings_pairing_code_label">6-Digit Pairing Code (Split-Screen)</string>
     <string name="settings_pair_now">Pair &amp; Start Internal Shell</string>
     <string name="settings_auto_reconnect_label">Auto-reconnect Wireless ADB after reboot</string>
 

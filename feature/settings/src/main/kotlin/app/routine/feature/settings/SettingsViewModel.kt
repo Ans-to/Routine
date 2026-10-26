@@ -23,7 +23,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +39,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.routine.core.data.repository.RoutineBackupSerializer
@@ -58,6 +59,8 @@ import app.routine.privilege.api.PrivilegeAvailability
 import app.routine.privilege.api.PrivilegeOperationResult
 import app.routine.privilege.api.PrivilegeSetupCoordinator
 import app.routine.privilege.api.PrivilegedEngine
+import app.routine.privilege.api.WirelessPairingPhase
+import app.routine.privilege.api.WirelessPairingStatus
 import app.routine.trigger.standard.TriggerScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -85,6 +88,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserPreferences())
 
     val permissionSnapshot: StateFlow<PermissionSnapshot> = permissionStateProvider.snapshotFlow
+    val pairingStatus: StateFlow<WirelessPairingStatus> = setupCoordinator.observeWirelessPairingStatus()
 
     private val mutableAvailability = MutableStateFlow<PrivilegeAvailability>(
         PrivilegeAvailability.NotConfigured("Checking privileged tier status…"),
@@ -103,9 +107,44 @@ class SettingsViewModel @Inject constructor(
     val oneTimeCommand: String = setupCoordinator.buildOneTimeAdbCommand()
     val oneTimeQrMatrix: Array<BooleanArray> by lazy { setupCoordinator.encodeQrMatrix(oneTimeCommand) }
 
+    init {
+        viewModelScope.launch {
+            pairingStatus.collect { status ->
+                if (status.endpoint != null) {
+                    mutableEndpoint.value = status.endpoint
+                } else if (status.phase == WirelessPairingPhase.IDLE) {
+                    mutableEndpoint.value = null
+                }
+                when (status.phase) {
+                    WirelessPairingPhase.CONNECTED -> {
+                        status.message?.let { mutableStatusBanner.value = it }
+                        mutableAvailability.value = privilegedEngine.checkAvailability()
+                        permissionStateProvider.refresh()
+                    }
+                    WirelessPairingPhase.FAILED -> {
+                        status.message?.let { mutableStatusBanner.value = it }
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
     fun refreshStatus() {
         viewModelScope.launch {
             permissionStateProvider.refresh()
+            val current = privilegedEngine.checkAvailability()
+            if (current.isAvailable()) {
+                mutableAvailability.value = current
+                return@launch
+            }
+            if (isWirelessAdbSupported) {
+                val autoConnect = setupCoordinator.tryConnectPairedWirelessAdb()
+                if (autoConnect is PrivilegeOperationResult.Succeeded) {
+                    mutableStatusBanner.value = autoConnect.detail
+                    permissionStateProvider.refresh()
+                }
+            }
             mutableAvailability.value = privilegedEngine.checkAvailability()
         }
     }
@@ -119,6 +158,7 @@ class SettingsViewModel @Inject constructor(
         discoveryJob?.cancel()
         discoveryJob = null
         if (!enabled) {
+            setupCoordinator.stopWirelessPairingScan()
             mutableEndpoint.value = null
             return
         }
@@ -128,10 +168,12 @@ class SettingsViewModel @Inject constructor(
                 "Option A requires the wirelessAdb APK flavor (127.0.0.1 loopback socket support)."
             return
         }
+        setupCoordinator.startWirelessPairingScan()
         discoveryJob = viewModelScope.launch {
             try {
                 setupCoordinator.observeWirelessPairingEndpoints().collect { ep ->
                     mutableEndpoint.value = ep
+                    setupCoordinator.showPairingCodeNotification(ep.host, ep.port)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -154,6 +196,18 @@ class SettingsViewModel @Inject constructor(
                 is PrivilegeOperationResult.Failed -> result.reason
             }
             refreshStatus()
+        }
+    }
+
+    fun connectPairedWirelessAdb() {
+        viewModelScope.launch {
+            val result = setupCoordinator.tryConnectPairedWirelessAdb()
+            mutableStatusBanner.value = when (result) {
+                is PrivilegeOperationResult.Succeeded -> result.detail
+                is PrivilegeOperationResult.Failed -> result.reason
+            }
+            mutableAvailability.value = privilegedEngine.checkAvailability()
+            permissionStateProvider.refresh()
         }
     }
 
@@ -228,16 +282,21 @@ class SettingsViewModel @Inject constructor(
  * Backup/Restore, Theme preferences, and About info.
  */
 @Composable
-fun SettingsScreen(onReplayOnboarding: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    onReplayOnboarding: () -> Unit,
+    onRequestRuntimePermission: (String) -> Unit = {},
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
     val context = LocalContext.current
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val snapshot by viewModel.permissionSnapshot.collectAsStateWithLifecycle()
     val availability by viewModel.availability.collectAsStateWithLifecycle()
     val endpoint by viewModel.discoveredEndpoint.collectAsStateWithLifecycle()
+    val pairingStatus by viewModel.pairingStatus.collectAsStateWithLifecycle()
     val banner by viewModel.statusBanner.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.refreshStatus() }
-    DisposableEffect(Unit) { onDispose { viewModel.setScanning(false) } }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshStatus() }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json"),
@@ -246,6 +305,10 @@ fun SettingsScreen(onReplayOnboarding: () -> Unit, viewModel: SettingsViewModel 
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri -> if (uri != null) viewModel.importBackup(context, uri) }
+
+    val activeScanning = pairingStatus.phase == WirelessPairingPhase.SCANNING ||
+        pairingStatus.phase == WirelessPairingPhase.PORT_FOUND ||
+        pairingStatus.phase == WirelessPairingPhase.PAIRING
 
     val copiedToast = stringResource(R.string.settings_copied_toast)
     SettingsContent(
@@ -268,6 +331,9 @@ fun SettingsScreen(onReplayOnboarding: () -> Unit, viewModel: SettingsViewModel 
         onSetDynamicColor = viewModel::setDynamicColor,
         onReplayOnboarding = onReplayOnboarding,
         isWirelessAdbSupported = viewModel.isWirelessAdbSupported,
+        isScanningActive = activeScanning,
+        onConnectPaired = viewModel::connectPairedWirelessAdb,
+        onRequestRuntimePermission = onRequestRuntimePermission,
     )
 }
 
@@ -292,20 +358,40 @@ fun SettingsContent(
     onSetDynamicColor: (Boolean) -> Unit,
     onReplayOnboarding: () -> Unit,
     isWirelessAdbSupported: Boolean = true,
+    isScanningActive: Boolean = false,
+    onConnectPaired: () -> Unit = {},
+    onRequestRuntimePermission: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     var pendingPermission by rememberSaveable { mutableStateOf<SystemPermission?>(null) }
+    var openDevOptionsAfterNotif by rememberSaveable { mutableStateOf(false) }
 
     pendingPermission?.let { perm ->
         PermissionExplanationBottomSheet(
             permission = perm,
-            onDismiss = { pendingPermission = null },
-            onConfirmProceed = {
+            onDismiss = {
                 pendingPermission = null
-                runCatching {
-                    context.startActivity(PermissionPromptCatalog.buildSettingsIntent(context, perm))
-                }.onFailure { err ->
-                    android.util.Log.w("SettingsContent", "Failed to open settings intent", err)
+                openDevOptionsAfterNotif = false
+            },
+            onConfirmProceed = { spec ->
+                pendingPermission = null
+                val runtimePerm = spec.runtimeManifestPermission
+                if (runtimePerm != null) {
+                    onRequestRuntimePermission(runtimePerm)
+                    onSetScanning(true)
+                    if (openDevOptionsAfterNotif) {
+                        openDevOptionsAfterNotif = false
+                        pendingPermission = SystemPermission.ADB_SHELL_BRIDGE
+                    }
+                } else {
+                    if (perm == SystemPermission.ADB_SHELL_BRIDGE) {
+                        onSetScanning(true)
+                    }
+                    runCatching {
+                        context.startActivity(PermissionPromptCatalog.buildSettingsIntent(context, perm))
+                    }.onFailure { err ->
+                        android.util.Log.w("SettingsContent", "Failed to open settings intent", err)
+                    }
                 }
                 onRecheckStatus()
             },
@@ -337,10 +423,26 @@ fun SettingsContent(
                 discoveredEndpoint = discoveredEndpoint,
                 autoReconnect = preferences.wirelessDebuggingAutoReconnect,
                 isWirelessAdbSupported = isWirelessAdbSupported,
+                isScanningActive = isScanningActive,
                 onRecheckStatus = onRecheckStatus,
                 onCopyCommand = onCopyCommand,
-                onOpenDevOptions = { pendingPermission = SystemPermission.ADB_SHELL_BRIDGE },
-                onSetScanning = onSetScanning,
+                onOpenDevOptions = {
+                    if (!snapshot.isSatisfied(SystemPermission.POST_NOTIFICATIONS)) {
+                        openDevOptionsAfterNotif = true
+                        pendingPermission = SystemPermission.POST_NOTIFICATIONS
+                    } else {
+                        pendingPermission = SystemPermission.ADB_SHELL_BRIDGE
+                    }
+                },
+                onSetScanning = { enable ->
+                    if (enable && !snapshot.isSatisfied(SystemPermission.POST_NOTIFICATIONS)) {
+                        openDevOptionsAfterNotif = false
+                        pendingPermission = SystemPermission.POST_NOTIFICATIONS
+                    } else {
+                        onSetScanning(enable)
+                    }
+                },
+                onConnectPaired = onConnectPaired,
                 onSendPairingNotification = onSendPairingNotification,
                 onPairDirect = onPairDirect,
                 onSetAutoReconnect = onSetAutoReconnect,
@@ -373,17 +475,24 @@ private fun PrivilegedSetupSection(
     discoveredEndpoint: PairingEndpointInfo?,
     autoReconnect: Boolean,
     isWirelessAdbSupported: Boolean,
+    isScanningActive: Boolean,
     onRecheckStatus: () -> Unit,
     onCopyCommand: () -> Unit,
     onOpenDevOptions: () -> Unit,
     onSetScanning: (Boolean) -> Unit,
+    onConnectPaired: () -> Unit,
     onSendPairingNotification: (PairingEndpointInfo) -> Unit,
     onPairDirect: (PairingEndpointInfo, String) -> Unit,
     onSetAutoReconnect: (Boolean) -> Unit,
 ) {
     var showQr by rememberSaveable { mutableStateOf(false) }
-    var scanning by rememberSaveable { mutableStateOf(false) }
+    var localScanToggle by rememberSaveable { mutableStateOf(false) }
     var pairingCode by rememberSaveable { mutableStateOf("") }
+    val scanning = isScanningActive || localScanToggle
+
+    LaunchedEffect(isScanningActive) {
+        localScanToggle = isScanningActive
+    }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -436,19 +545,26 @@ private fun PrivilegedSetupSection(
                 )
             } else {
                 Text(text = stringResource(R.string.settings_opt_a_steps), style = MaterialTheme.typography.bodySmall)
+                Button(
+                    onClick = onOpenDevOptions,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.settings_open_dev_options))
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onOpenDevOptions) {
-                        Text(stringResource(R.string.settings_open_dev_options))
-                    }
                     val scanBtnRes =
                         if (scanning) R.string.settings_scan_ports_stop else R.string.settings_scan_ports_start
-                    Button(
+                    OutlinedButton(
                         onClick = {
-                            scanning = !scanning
-                            onSetScanning(scanning)
+                            val target = !scanning
+                            localScanToggle = target
+                            onSetScanning(target)
                         },
                     ) {
                         Text(stringResource(scanBtnRes))
+                    }
+                    OutlinedButton(onClick = onConnectPaired) {
+                        Text(stringResource(R.string.settings_connect_paired))
                     }
                 }
             }

@@ -208,6 +208,7 @@ private fun RoutineAppScaffold(onboardingCompleted: Boolean, onRequestRuntimePer
                 RoutineTab.LOGS -> LogViewerScreen()
                 RoutineTab.SETTINGS -> SettingsScreen(
                     onReplayOnboarding = { forceOnboarding = true },
+                    onRequestRuntimePermission = onRequestRuntimePermission,
                 )
             }
         }
