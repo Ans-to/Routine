@@ -116,5 +116,10 @@ class PrivilegedEngineContractTest {
         grant.availability = PrivilegeAvailability.OneTimeGrantActive
         val fallbackGrant = composite.grantPermission("app.routine", "android.permission.WRITE_SECURE_SETTINGS")
         assertTrue(fallbackGrant is PrivilegeOperationResult.Succeeded)
+
+        val endpoint = PairingEndpointInfo(host = "127.0.0.1", port = 39123, label = "debug")
+        assertEquals(39123, endpoint.port)
+        assertEquals("127.0.0.1", endpoint.host)
+        assertEquals("debug", endpoint.label)
     }
 }

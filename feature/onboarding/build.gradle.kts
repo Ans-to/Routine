@@ -35,6 +35,7 @@ android {
 
 dependencies {
     api(project(":core:model"))
+    implementation(project(":core:data"))
     implementation(project(":core:permissions"))
     implementation(project(":privilege:api"))
     implementation(platform(libs.androidx.compose.bom))

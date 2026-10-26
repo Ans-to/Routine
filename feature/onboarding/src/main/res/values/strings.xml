@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_finish">Start Automating</string>
+    <string name="onboarding_step_indicator">Step %1$d of 3</string>
+
+    <string name="onboarding_welcome_title">Automations without the learning curve</string>
+    <string name="onboarding_welcome_body">Routine runs 100% locally on your device. No accounts, no cloud sync, no external companion apps, and zero analytics.</string>
+    <string name="onboarding_welcome_bullet_1">One-tap templates with clear Ready, Setup, and Privileged badges.</string>
+    <string name="onboarding_welcome_bullet_2">Encrypted local SQLite rule and execution log storage.</string>
+    <string name="onboarding_welcome_bullet_3">Built-in safety circuit breaker after 5 consecutive failures.</string>
+
+    <string name="onboarding_reliability_title">Reliable background execution</string>
+    <string name="onboarding_reliability_body">Grant notifications for alerts and exempt Routine from aggressive battery killing so scheduled rules fire on time.</string>
+    <string name="onboarding_grant_notifications">Review Notification Permission</string>
+    <string name="onboarding_grant_battery">Review Battery Optimization</string>
+    <string name="onboarding_granted_badge">Granted</string>
+
+    <string name="onboarding_tiers_title">Three self-contained capability tiers</string>
+    <string name="onboarding_tiers_body">Most automations work out of the box. Power-user toggles (Wi-Fi, Hotspot, Night Light) can be unlocked anytime in Settings with zero third-party apps.</string>
+    <string name="onboarding_tier_standard_title">1. Standard Tier (Ready Now)</string>
+    <string name="onboarding_tier_standard_desc">Time, battery, charger, Bluetooth, Do Not Disturb, brightness, notifications, and app launches.</string>
+    <string name="onboarding_tier_grant_title">2. One-Time ADB Grant (Persistent)</string>
+    <string name="onboarding_tier_grant_desc">Run one adb command once to unlock Settings.Secure toggles across reboots with no background daemon.</string>
+    <string name="onboarding_tier_bridge_title">3. Built-in Wireless ADB Bridge</string>
+    <string name="onboarding_tier_bridge_desc">Pair directly via Android 11+ Wireless Debugging inside Routine for full shell-level Wi-Fi and hotspot toggles.</string>
+
+    <string name="perm_sheet_why_heading">Why Routine needs this</string>
+    <string name="perm_sheet_fallback_heading">If you skip</string>
+    <string name="perm_sheet_continue">Continue to System Prompt</string>
+    <string name="perm_sheet_cancel">Not Now</string>
+
+    <string name="perm_notifications_title">Post Notifications</string>
+    <string name="perm_notifications_why">Allows Routine to deliver reminder notifications, storage/data alerts, and circuit-breaker warnings.</string>
+    <string name="perm_notifications_fallback">Notification actions will be skipped while toast, ringer, and setting rules continue to work.</string>
+
+    <string name="perm_exact_alarm_title">Alarms &amp; Reminders</string>
+    <string name="perm_exact_alarm_why">Fires time-based automations (such as Bedtime Mode and Morning Briefing) at the exact minute you choose.</string>
+    <string name="perm_exact_alarm_fallback">Routine falls back to Android\'s inexact idle-friendly alarm window.</string>
+
+    <string name="perm_battery_title">Unrestricted Battery Usage</string>
+    <string name="perm_battery_why">Prevents OEM battery savers from delaying exact time triggers or stopping Wireless Debugging reconnection.</string>
+    <string name="perm_battery_fallback">Rules still run through standard Android broadcasts and WorkManager, which may be deferred during Doze.</string>
+
+    <string name="perm_dnd_title">Do Not Disturb Access</string>
+    <string name="perm_dnd_why">Required by Android to silence the ringer or enable Do Not Disturb during meetings and bedtime.</string>
+    <string name="perm_dnd_fallback">Ringer can still switch between Normal and Vibrate, and notifications still work.</string>
+
+    <string name="perm_write_settings_title">Modify System Settings</string>
+    <string name="perm_write_settings_why">Lets Routine adjust screen brightness percentage and lock screen auto-rotation.</string>
+    <string name="perm_write_settings_fallback">Brightness and rotation-lock steps will report Needs Setup until enabled.</string>
+
+    <string name="perm_location_title">Location Access for Wi-Fi &amp; Geofences</string>
+    <string name="perm_location_why">Android requires location permission to read the connected Wi-Fi SSID name or detect arrival at a saved place.</string>
+    <string name="perm_location_fallback">Time, charger, battery, and manual triggers remain available without location.</string>
+
+    <string name="perm_bluetooth_title">Nearby Bluetooth Devices</string>
+    <string name="perm_bluetooth_why">Detects when your car hands-free kit or Bluetooth headphones connect.</string>
+    <string name="perm_bluetooth_fallback">Bluetooth-triggered rules stay paused until permission is granted.</string>
+
+    <string name="perm_calendar_title">Read Calendar Busy Status</string>
+    <string name="perm_calendar_why">Checks whether a busy calendar event is currently in progress to toggle Do Not Disturb automatically.</string>
+    <string name="perm_calendar_fallback">You can switch the rule to Manual trigger mode without calendar access.</string>
+
+    <string name="perm_contacts_call_title">Contacts &amp; Call Screening</string>
+    <string name="perm_contacts_call_why">Checks whether an incoming caller is in your address book so unknown spam callers can be silenced locally.</string>
+    <string name="perm_contacts_call_fallback">Incoming calls will ring normally.</string>
+
+    <string name="perm_usage_stats_title">Usage Access</string>
+    <string name="perm_usage_stats_why">Reads monthly mobile data usage totals to alert you before exceeding your carrier cap.</string>
+    <string name="perm_usage_stats_fallback">Storage alerts and other periodic checks continue working without Usage Access.</string>
+
+    <string name="perm_sms_title">Send SMS Auto-Reply</string>
+    <string name="perm_sms_why">Allows optional direct SMS auto-reply when connected to your car Bluetooth.</string>
+    <string name="perm_sms_fallback">Routine falls back to opening your SMS app with the reply pre-filled.</string>
+
+    <string name="perm_accessibility_title">Optional Foreground App Detector</string>
+    <string name="perm_accessibility_why">Observes window package changes only so Routine knows when a configured video or reading app opens. Never reads screen text or taps UI.</string>
+    <string name="perm_accessibility_fallback">All other 18 templates work without enabling Accessibility.</string>
+
+    <string name="perm_privileged_title">Self-Contained Privileged Tier</string>
+    <string name="perm_privileged_why">Android restricts Wi-Fi, Hotspot, and Settings.Secure toggles to shell or WRITE_SECURE_SETTINGS privileges.</string>
+    <string name="perm_privileged_fallback">Routine opens the Quick Settings Wi-Fi panel or guides you through built-in Wireless Debugging / One-Time ADB setup.</string>
+</resources>
