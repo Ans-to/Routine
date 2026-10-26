@@ -112,7 +112,9 @@ data class Rule(
             TriggerType.LOCATION_GEOFENCE -> {
                 val lat = trigger.config["latitude"]?.toDoubleOrNull()
                 val lon = trigger.config["longitude"]?.toDoubleOrNull()
-                if (lat == null || lat !in -90.0..90.0 || lon == null || lon !in -180.0..180.0) {
+                val validLat = lat != null && lat in -90.0..90.0
+                val validLon = lon != null && lon in -180.0..180.0
+                if (!validLat || !validLon) {
                     errors += "LOCATION_GEOFENCE trigger requires valid 'latitude' and 'longitude'."
                 }
             }
