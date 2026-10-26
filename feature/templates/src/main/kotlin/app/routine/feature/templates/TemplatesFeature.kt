@@ -420,11 +420,20 @@ private fun TemplateActivationBottomSheet(
                     }
                 }
                 is Capability.RequiresPrivilegeTier -> {
-                    OutlinedButton(
-                        onClick = onOpenPrivilegeSetup,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.template_sheet_open_privilege_setup))
+                    if (cap.requiredTier == app.routine.core.model.PrivilegeTier.ACCESSIBILITY) {
+                        OutlinedButton(
+                            onClick = { onRequestPermissionSheet(SystemPermission.ACCESSIBILITY_SERVICE) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.template_sheet_grant_first))
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onOpenPrivilegeSetup,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.template_sheet_open_privilege_setup))
+                        }
                     }
                 }
                 else -> Unit

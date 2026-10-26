@@ -7,8 +7,15 @@
     <string name="my_rules_last_triggered_never">Last triggered: Never</string>
     <string name="my_rules_last_triggered_fmt">Last triggered: %1$s</string>
     <string name="my_rules_circuit_tripped">Paused after %1$d consecutive failures</string>
+    <string name="my_rules_status_ready">Ready — armed for triggers</string>
+    <string name="my_rules_grant_permission">Grant Missing Permission</string>
+    <string name="my_rules_open_privilege_setup">Open Privileged Tier Setup</string>
+    <string name="my_rules_run_succeeded">Ran \"%1$s\": %2$s</string>
+    <string name="my_rules_run_failed">\"%1$s\" failed: %2$s</string>
+    <string name="my_rules_run_needs_privilege">\"%1$s\" requires One-Time ADB Grant or Wireless Debugging setup in Settings.</string>
+    <string name="my_rules_dismiss_banner">Dismiss</string>
     <string name="my_rules_edit">Edit</string>
-    <string name="my_rules_run_now">Run</string>
+    <string name="my_rules_run_now">Run Now</string>
     <string name="my_rules_delete">Delete</string>
 
     <string name="editor_title_new">New Rule</string>

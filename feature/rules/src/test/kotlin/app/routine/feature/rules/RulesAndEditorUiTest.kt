@@ -79,6 +79,39 @@ class RulesAndEditorUiTest {
     }
 
     @Test
+    fun `clicking Run Now in MyRulesContent executes rule and shows visible status banner`() {
+        val sampleRule = Rule(
+            id = "r_run",
+            name = "Instant Toast",
+            trigger = Trigger(TriggerType.ALARM_DISMISSED),
+            actions = listOf(Action(ActionType.TOAST, mapOf("message" to "Hello from Run Now"))),
+            enabled = true,
+        )
+        var bannerText by mutableStateOf<String?>(null)
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                MyRulesContent(
+                    rules = listOf(sampleRule),
+                    onToggleRule = { _, _ -> },
+                    onRunRule = { triggered ->
+                        bannerText = "Ran \"${triggered.name}\": Displayed toast"
+                    },
+                    onEditRule = {},
+                    onDeleteRule = {},
+                    onCreateRule = {},
+                    statusBanner = bannerText,
+                    onDismissBanner = { bannerText = null },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("rule_run_r_run").performClick()
+        composeTestRule.onNodeWithTag("my_rules_status_banner").assertIsDisplayed()
+        assertTrue(bannerText?.contains("Instant Toast") == true)
+    }
+
+    @Test
     fun `clicking Test Rule in RuleEditorContent executes side-effect-free dry run and displays banner`() {
         var realExecuteCalled = false
         val recordedLogs = mutableListOf<ExecutionLogEntry>()

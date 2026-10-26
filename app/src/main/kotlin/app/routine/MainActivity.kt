@@ -202,6 +202,8 @@ private fun RoutineAppScaffold(onboardingCompleted: Boolean, onRequestRuntimePer
                         editingRuleId = ruleId
                         isEditorOpen = true
                     },
+                    onRequestRuntimePermission = onRequestRuntimePermission,
+                    onNavigateToPrivilegeSetup = { selectedTab = RoutineTab.SETTINGS },
                 )
                 RoutineTab.LOGS -> LogViewerScreen()
                 RoutineTab.SETTINGS -> SettingsScreen(

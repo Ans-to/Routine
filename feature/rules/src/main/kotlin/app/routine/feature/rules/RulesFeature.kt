@@ -1,5 +1,6 @@
 package app.routine.feature.rules
 
+import android.content.Context
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,12 +27,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -43,24 +47,70 @@ import app.routine.core.data.repository.LogRepository
 import app.routine.core.data.repository.RuleRepository
 import app.routine.core.engine.RuleEngine
 import app.routine.core.model.ExecutionLogEntry
+import app.routine.core.model.ExecutionResult
 import app.routine.core.model.LogStatus
+import app.routine.core.model.PrivilegeTier
 import app.routine.core.model.Rule
+import app.routine.core.model.SystemPermission
+import app.routine.core.model.Trigger
+import app.routine.core.model.TriggerType
+import app.routine.core.permissions.Capability
+import app.routine.core.permissions.CapabilityChecker
+import app.routine.core.permissions.PermissionStateProvider
+import app.routine.feature.onboarding.PermissionExplanationBottomSheet
+import app.routine.feature.onboarding.PermissionPromptCatalog
 import app.routine.trigger.standard.TriggerScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class MyRulesViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val ruleRepository: RuleRepository,
     private val ruleEngine: RuleEngine,
+    private val capabilityChecker: CapabilityChecker,
+    private val permissionStateProvider: PermissionStateProvider,
     private val triggerScheduler: TriggerScheduler,
 ) : ViewModel() {
     val rules: StateFlow<List<Rule>> = ruleRepository.allRulesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val capabilitiesByRuleId: StateFlow<Map<String, Capability>> = combine(
+        ruleRepository.allRulesFlow,
+        permissionStateProvider.snapshotFlow,
+    ) { allRules, snapshot ->
+        allRules.associate { rule -> rule.id to capabilityChecker.evaluateRule(rule, snapshot) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    private val mutableStatusBanner = MutableStateFlow<String?>(null)
+    val statusBanner: StateFlow<String?> = mutableStatusBanner.asStateFlow()
+
+    private val mutablePendingPermission = MutableStateFlow<SystemPermission?>(null)
+    val pendingPermission: StateFlow<SystemPermission?> = mutablePendingPermission.asStateFlow()
+
+    private val mutableNeedsPrivilegeNav = MutableStateFlow(false)
+    val needsPrivilegeNav: StateFlow<Boolean> = mutableNeedsPrivilegeNav.asStateFlow()
+
+    fun refreshCapabilities() {
+        viewModelScope.launch { permissionStateProvider.refresh() }
+    }
+
+    fun dismissBanner() {
+        mutableStatusBanner.value = null
+        mutableNeedsPrivilegeNav.value = false
+    }
+
+    fun requestPermissionExplanation(permission: SystemPermission?) {
+        mutablePendingPermission.value = permission
+    }
 
     fun setRuleEnabled(rule: Rule, enabled: Boolean) {
         viewModelScope.launch {
@@ -76,7 +126,35 @@ class MyRulesViewModel @Inject constructor(
 
     fun runRuleNow(rule: Rule) {
         viewModelScope.launch {
-            ruleEngine.execute(rule = rule, event = null, dryRun = false)
+            val manualRule = rule.copy(
+                enabled = true,
+                cooldownSeconds = 0L,
+                consecutiveFailures = 0,
+                trigger = Trigger(TriggerType.CALENDAR_OR_MANUAL, mapOf("mode" to "MANUAL")),
+            )
+            when (val cap = capabilityChecker.checkRule(manualRule)) {
+                is Capability.NeedsSetup -> {
+                    mutablePendingPermission.value = cap.missingPermissions.firstOrNull()
+                    return@launch
+                }
+                is Capability.RequiresPrivilegeTier -> {
+                    if (cap.requiredTier == PrivilegeTier.ACCESSIBILITY) {
+                        mutablePendingPermission.value = SystemPermission.ACCESSIBILITY_SERVICE
+                    } else {
+                        mutableNeedsPrivilegeNav.value = true
+                        mutableStatusBanner.value = appContext.getString(
+                            R.string.my_rules_run_needs_privilege,
+                            rule.name,
+                        )
+                    }
+                    return@launch
+                }
+                else -> Unit
+            }
+
+            mutableNeedsPrivilegeNav.value = false
+            val result = ruleEngine.execute(rule = manualRule, event = null, dryRun = false)
+            mutableStatusBanner.value = formatManualRunBanner(rule.name, result)
         }
     }
 
@@ -86,18 +164,63 @@ class MyRulesViewModel @Inject constructor(
             ruleRepository.deleteRule(rule.id)
         }
     }
+
+    private fun formatManualRunBanner(ruleName: String, result: ExecutionResult): String = when (result) {
+        is ExecutionResult.Succeeded -> {
+            val steps = result.stepResults.joinToString(" → ") { it.summary }
+            appContext.getString(R.string.my_rules_run_succeeded, ruleName, steps)
+        }
+        is ExecutionResult.Failed ->
+            appContext.getString(R.string.my_rules_run_failed, ruleName, result.errorMessage)
+        is ExecutionResult.BlockedByCapability ->
+            appContext.getString(R.string.my_rules_run_failed, ruleName, result.reason)
+        is ExecutionResult.TimedOut ->
+            appContext.getString(R.string.my_rules_run_failed, ruleName, "Timed out after ${result.timeoutMs}ms")
+        else -> appContext.getString(R.string.my_rules_run_succeeded, ruleName, result.status.name)
+    }
 }
 
 /**
- * My Rules screen displaying Active and Inactive rule sections, toggles, last-run times, and quick actions.
+ * My Rules screen displaying Active and Inactive rule sections, toggles, capability setup prompts, and Run Now.
  */
 @Composable
 fun MyRulesScreen(
     onCreateRule: () -> Unit,
     onEditRule: (String) -> Unit,
+    onRequestRuntimePermission: (String) -> Unit = {},
+    onNavigateToPrivilegeSetup: () -> Unit = {},
     viewModel: MyRulesViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val rules by viewModel.rules.collectAsStateWithLifecycle()
+    val capabilities by viewModel.capabilitiesByRuleId.collectAsStateWithLifecycle()
+    val banner by viewModel.statusBanner.collectAsStateWithLifecycle()
+    val pendingPerm by viewModel.pendingPermission.collectAsStateWithLifecycle()
+    val showPrivilegeButton by viewModel.needsPrivilegeNav.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) { viewModel.refreshCapabilities() }
+
+    pendingPerm?.let { perm ->
+        PermissionExplanationBottomSheet(
+            permission = perm,
+            onDismiss = { viewModel.requestPermissionExplanation(null) },
+            onConfirmProceed = { spec ->
+                viewModel.requestPermissionExplanation(null)
+                val runtimePerm = spec.runtimeManifestPermission
+                if (runtimePerm != null) {
+                    onRequestRuntimePermission(runtimePerm)
+                } else {
+                    runCatching {
+                        context.startActivity(PermissionPromptCatalog.buildSettingsIntent(context, perm))
+                    }.onFailure { err ->
+                        android.util.Log.w("MyRulesScreen", "Failed to start settings intent", err)
+                    }
+                }
+                viewModel.refreshCapabilities()
+            },
+        )
+    }
+
     MyRulesContent(
         rules = rules,
         onToggleRule = viewModel::setRuleEnabled,
@@ -105,6 +228,15 @@ fun MyRulesScreen(
         onEditRule = onEditRule,
         onDeleteRule = viewModel::deleteRule,
         onCreateRule = onCreateRule,
+        capabilitiesByRuleId = capabilities,
+        statusBanner = banner,
+        showPrivilegeSetupButton = showPrivilegeButton,
+        onDismissBanner = viewModel::dismissBanner,
+        onRequestPermission = { perm -> viewModel.requestPermissionExplanation(perm) },
+        onNavigateToPrivilegeSetup = {
+            viewModel.dismissBanner()
+            onNavigateToPrivilegeSetup()
+        },
     )
 }
 
@@ -119,6 +251,12 @@ fun MyRulesContent(
     onEditRule: (String) -> Unit,
     onDeleteRule: (Rule) -> Unit,
     onCreateRule: () -> Unit,
+    capabilitiesByRuleId: Map<String, Capability> = emptyMap(),
+    statusBanner: String? = null,
+    showPrivilegeSetupButton: Boolean = false,
+    onDismissBanner: () -> Unit = {},
+    onRequestPermission: (SystemPermission) -> Unit = {},
+    onNavigateToPrivilegeSetup: () -> Unit = {},
 ) {
     val active = rules.filter { it.enabled }
     val inactive = rules.filterNot { it.enabled }
@@ -140,6 +278,16 @@ fun MyRulesContent(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (statusBanner != null) {
+                item(key = "my_rules_status_banner") {
+                    RuleExecutionBannerCard(
+                        message = statusBanner,
+                        showPrivilegeSetupButton = showPrivilegeSetupButton,
+                        onOpenPrivilegeSetup = onNavigateToPrivilegeSetup,
+                        onDismiss = onDismissBanner,
+                    )
+                }
+            }
             if (rules.isEmpty()) {
                 item {
                     Text(
@@ -157,10 +305,13 @@ fun MyRulesContent(
                 items(active, key = { it.id }) { rule ->
                     RuleItemCard(
                         rule = rule,
+                        capability = capabilitiesByRuleId[rule.id],
                         onToggle = { enabled -> onToggleRule(rule, enabled) },
                         onRun = { onRunRule(rule) },
                         onEdit = { onEditRule(rule.id) },
                         onDelete = { onDeleteRule(rule) },
+                        onRequestPermission = onRequestPermission,
+                        onNavigateToPrivilegeSetup = onNavigateToPrivilegeSetup,
                     )
                 }
                 item {
@@ -172,11 +323,49 @@ fun MyRulesContent(
                 items(inactive, key = { it.id }) { rule ->
                     RuleItemCard(
                         rule = rule,
+                        capability = capabilitiesByRuleId[rule.id],
                         onToggle = { enabled -> onToggleRule(rule, enabled) },
                         onRun = { onRunRule(rule) },
                         onEdit = { onEditRule(rule.id) },
                         onDelete = { onDeleteRule(rule) },
+                        onRequestPermission = onRequestPermission,
+                        onNavigateToPrivilegeSetup = onNavigateToPrivilegeSetup,
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RuleExecutionBannerCard(
+    message: String,
+    showPrivilegeSetupButton: Boolean,
+    onOpenPrivilegeSetup: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("my_rules_status_banner"),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (showPrivilegeSetupButton) {
+                    Button(onClick = onOpenPrivilegeSetup) {
+                        Text(stringResource(R.string.my_rules_open_privilege_setup))
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.my_rules_dismiss_banner))
                 }
             }
         }
@@ -186,10 +375,13 @@ fun MyRulesContent(
 @Composable
 private fun RuleItemCard(
     rule: Rule,
+    capability: Capability?,
     onToggle: (Boolean) -> Unit,
     onRun: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onRequestPermission: (SystemPermission) -> Unit,
+    onNavigateToPrivilegeSetup: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -212,6 +404,11 @@ private fun RuleItemCard(
                     modifier = Modifier.testTag("rule_toggle_${rule.id}"),
                 )
             }
+            RuleCapabilityRow(
+                capability = capability,
+                onRequestPermission = onRequestPermission,
+                onNavigateToPrivilegeSetup = onNavigateToPrivilegeSetup,
+            )
             val lastTriggered = rule.lastTriggeredEpochMs
             val lastTriggeredLabel = if (lastTriggered != null) {
                 stringResource(
@@ -233,7 +430,10 @@ private fun RuleItemCard(
                 OutlinedButton(onClick = onEdit) {
                     Text(stringResource(R.string.my_rules_edit))
                 }
-                Button(onClick = onRun) {
+                Button(
+                    onClick = onRun,
+                    modifier = Modifier.testTag("rule_run_${rule.id}"),
+                ) {
                     Text(stringResource(R.string.my_rules_run_now))
                 }
                 TextButton(onClick = onDelete) {
@@ -241,6 +441,43 @@ private fun RuleItemCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RuleCapabilityRow(
+    capability: Capability?,
+    onRequestPermission: (SystemPermission) -> Unit,
+    onNavigateToPrivilegeSetup: () -> Unit,
+) {
+    when (capability) {
+        Capability.Ready -> {
+            Text(
+                text = stringResource(R.string.my_rules_status_ready),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF2E7D32),
+            )
+        }
+        is Capability.NeedsSetup -> {
+            val missingPerm = capability.missingPermissions.firstOrNull()
+            if (missingPerm != null) {
+                OutlinedButton(onClick = { onRequestPermission(missingPerm) }) {
+                    Text(stringResource(R.string.my_rules_grant_permission))
+                }
+            }
+        }
+        is Capability.RequiresPrivilegeTier -> {
+            if (capability.requiredTier == PrivilegeTier.ACCESSIBILITY) {
+                OutlinedButton(onClick = { onRequestPermission(SystemPermission.ACCESSIBILITY_SERVICE) }) {
+                    Text(stringResource(R.string.my_rules_grant_permission))
+                }
+            } else {
+                OutlinedButton(onClick = onNavigateToPrivilegeSetup) {
+                    Text(stringResource(R.string.my_rules_open_privilege_setup))
+                }
+            }
+        }
+        else -> Unit
     }
 }
 

@@ -24,6 +24,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.launch
 
 /**
  * Dispatches incoming [TriggerEvent]s to all matching enabled [Rule]s through [RuleEngine].
@@ -54,19 +55,43 @@ class TriggerScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
     private val ruleRepository: RuleRepository,
 ) {
+    private val schedulerScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+    )
+
     suspend fun syncAllEnabledRules() {
         val allRules = ruleRepository.getAllRules()
         allRules.forEach { rule ->
             if (rule.enabled) {
-                registerRuleTrigger(rule)
+                registerDirectRuleAlarmOrGeofence(rule)
             } else {
-                unregisterRuleTrigger(rule)
+                unregisterDirectRuleAlarmOrGeofence(rule)
             }
         }
-        syncPeriodicWork(allRules.filter { it.enabled })
+        val enabledRules = allRules.filter { it.enabled }
+        syncPeriodicWork(enabledRules)
+        syncLiveMonitorService(enabledRules)
     }
 
     fun registerRuleTrigger(rule: Rule) {
+        registerDirectRuleAlarmOrGeofence(rule)
+        schedulerScope.launch {
+            val enabledRules = ruleRepository.getAllRules().filter { it.enabled }
+            syncPeriodicWork(enabledRules)
+            syncLiveMonitorService(enabledRules)
+        }
+    }
+
+    fun unregisterRuleTrigger(rule: Rule) {
+        unregisterDirectRuleAlarmOrGeofence(rule)
+        schedulerScope.launch {
+            val enabledRules = ruleRepository.getAllRules().filter { it.enabled }
+            syncPeriodicWork(enabledRules)
+            syncLiveMonitorService(enabledRules)
+        }
+    }
+
+    private fun registerDirectRuleAlarmOrGeofence(rule: Rule) {
         when (rule.trigger.type) {
             TriggerType.TIME -> scheduleNextExactTimeAlarm(rule)
             TriggerType.LOCATION_GEOFENCE -> registerProximityGeofence(rule)
@@ -74,7 +99,7 @@ class TriggerScheduler @Inject constructor(
         }
     }
 
-    fun unregisterRuleTrigger(rule: Rule) {
+    private fun unregisterDirectRuleAlarmOrGeofence(rule: Rule) {
         when (rule.trigger.type) {
             TriggerType.TIME -> cancelTimeAlarm(rule.id)
             TriggerType.LOCATION_GEOFENCE -> unregisterProximityGeofence(rule.id)
@@ -179,8 +204,33 @@ class TriggerScheduler @Inject constructor(
         }
     }
 
+    private fun syncLiveMonitorService(enabledRules: List<Rule>) {
+        if (Build.FINGERPRINT == "robolectric") return
+        val liveRules = enabledRules.filter { it.trigger.type in LIVE_MONITOR_TRIGGERS }
+        val serviceIntent = Intent(context, RoutineTriggerMonitorService::class.java).apply {
+            putExtra(RoutineTriggerMonitorService.EXTRA_ACTIVE_RULE_COUNT, liveRules.size)
+        }
+        runCatching {
+            if (liveRules.isNotEmpty()) {
+                ContextCompat.startForegroundService(context, serviceIntent)
+            } else {
+                context.stopService(serviceIntent)
+            }
+        }.onFailure { err ->
+            android.util.Log.w(TAG, "Unable to sync RoutineTriggerMonitorService", err)
+        }
+    }
+
     companion object {
         private const val TAG: String = "TriggerScheduler"
+        private val LIVE_MONITOR_TRIGGERS = setOf(
+            TriggerType.CHARGER,
+            TriggerType.BATTERY_LEVEL,
+            TriggerType.WIFI_SSID,
+            TriggerType.BLUETOOTH_CONNECTED,
+            TriggerType.HOTSPOT_DURATION,
+            TriggerType.ALARM_DISMISSED,
+        )
         const val ACTION_ROUTINE_TIME_ALARM: String = "app.routine.trigger.ACTION_TIME_ALARM"
         const val ACTION_ROUTINE_GEOFENCE: String = "app.routine.trigger.ACTION_GEOFENCE"
         const val ACTION_ROUTINE_HOTSPOT_TIMEOUT: String = "app.routine.trigger.ACTION_HOTSPOT_TIMEOUT"

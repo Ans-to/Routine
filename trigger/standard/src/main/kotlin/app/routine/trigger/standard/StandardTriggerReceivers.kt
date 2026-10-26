@@ -135,12 +135,32 @@ class WifiTriggerReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        private const val PREFS_WIFI = "routine_wifi_state_tracker"
-        private const val KEY_LAST_SSID = "last_connected_ssid"
+        const val PREFS_WIFI: String = "routine_wifi_state_tracker"
+        const val KEY_LAST_SSID: String = "last_connected_ssid"
+
+        fun recordConnectedSsid(context: Context, ssid: String): TriggerEvent? {
+            val prefs = context.applicationContext.getSharedPreferences(PREFS_WIFI, Context.MODE_PRIVATE)
+            val previous = prefs.getString(KEY_LAST_SSID, null)
+            if (previous == ssid) return null
+            prefs.edit().putString(KEY_LAST_SSID, ssid).apply()
+            return TriggerEvent(
+                type = TriggerType.WIFI_SSID,
+                attributes = mapOf("ssid" to ssid, "transition" to "CONNECTED"),
+            )
+        }
+
+        fun recordDisconnected(context: Context): TriggerEvent? {
+            val prefs = context.applicationContext.getSharedPreferences(PREFS_WIFI, Context.MODE_PRIVATE)
+            val previousSsid = prefs.getString(KEY_LAST_SSID, null) ?: return null
+            prefs.edit().remove(KEY_LAST_SSID).apply()
+            return TriggerEvent(
+                type = TriggerType.WIFI_SSID,
+                attributes = mapOf("ssid" to previousSsid, "transition" to "DISCONNECTED"),
+            )
+        }
 
         @Suppress("DEPRECATION")
         fun evaluateWifiStateChange(context: Context, intent: Intent): TriggerEvent? {
-            val prefs = context.applicationContext.getSharedPreferences(PREFS_WIFI, Context.MODE_PRIVATE)
             val networkInfo = intent.getParcelableExtra<NetworkInfo>(WifiManager.EXTRA_NETWORK_INFO)
             val isConnected = networkInfo?.isConnected == true
 
@@ -149,18 +169,9 @@ class WifiTriggerReceiver : BroadcastReceiver() {
                 val ssid = intent.getStringExtra("ssid")?.let { TriggerScheduler.normalizeSsid(it) }
                     ?: TriggerScheduler.normalizeSsid(wifiManager?.connectionInfo?.ssid)
                     ?: return null
-                prefs.edit().putString(KEY_LAST_SSID, ssid).apply()
-                return TriggerEvent(
-                    type = TriggerType.WIFI_SSID,
-                    attributes = mapOf("ssid" to ssid, "transition" to "CONNECTED"),
-                )
+                return recordConnectedSsid(context, ssid)
             } else if (networkInfo?.state == NetworkInfo.State.DISCONNECTED) {
-                val previousSsid = prefs.getString(KEY_LAST_SSID, null) ?: return null
-                prefs.edit().remove(KEY_LAST_SSID).apply()
-                return TriggerEvent(
-                    type = TriggerType.WIFI_SSID,
-                    attributes = mapOf("ssid" to previousSsid, "transition" to "DISCONNECTED"),
-                )
+                return recordDisconnected(context)
             }
             return null
         }
@@ -321,6 +332,9 @@ class AlarmDismissedReceiver : BroadcastReceiver() {
         val SUPPORTED_ACTIONS: Set<String> = setOf(
             "android.intent.action.ALARM_DISMISS",
             "com.android.deskclock.ALARM_DISMISS",
+            "com.google.android.deskclock.ALARM_DISMISS",
+            "com.samsung.sec.android.clockpackage.alarm.ALARM_STOPPED_IN_ALERT",
+            "org.fossify.clock.ALARM_DISMISSED",
         )
     }
 }
