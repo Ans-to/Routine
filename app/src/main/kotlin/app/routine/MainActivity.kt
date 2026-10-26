@@ -143,7 +143,7 @@ private fun DebugLogCard(entry: ExecutionLogEntry) {
                 text = "[${entry.status.name}] ${entry.ruleName}",
                 style = MaterialTheme.typography.labelLarge,
             )
-            Text(text = entry.summary, style = MaterialTheme.typography.bodySmall)
+            Text(text = entry.message, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

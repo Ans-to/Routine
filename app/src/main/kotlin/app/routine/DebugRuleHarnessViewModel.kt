@@ -33,7 +33,7 @@ class DebugRuleHarnessViewModel @Inject constructor(
     val rules: StateFlow<List<Rule>> = ruleRepository.allRulesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val logs: StateFlow<List<ExecutionLogEntry>> = logRepository.observeLogs()
+    val logs: StateFlow<List<ExecutionLogEntry>> = logRepository.allLogsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun createSampleToastRule() {

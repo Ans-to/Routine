@@ -41,17 +41,13 @@ object AppEngineModule {
 
     @Provides
     @Singleton
-    fun provideTriggerMatcher(): TriggerMatcher = TriggerMatcher()
-
-    @Provides
-    @Singleton
     fun provideActionExecutorRegistry(executors: Set<@JvmSuppressWildcards ActionExecutor>): ActionExecutorRegistry =
         MapActionExecutorRegistry(executors)
 
     @Provides
     @Singleton
     fun provideCircuitBreakerListener(@ApplicationContext context: Context): CircuitBreakerListener =
-        CircuitBreakerListener { rule: Rule, lastError: String ->
+        CircuitBreakerListener { rule: Rule, _: Int, lastError: String ->
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (nm.getNotificationChannel(CIRCUIT_BREAKER_CHANNEL) == null) {
                 nm.createNotificationChannel(
