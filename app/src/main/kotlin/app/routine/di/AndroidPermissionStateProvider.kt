@@ -53,6 +53,9 @@ class AndroidPermissionStateProvider @Inject constructor(
             if (isBatteryOptimizationIgnored()) add(SystemPermission.IGNORE_BATTERY_OPTIMIZATIONS)
             if (isNotificationPolicyGranted()) add(SystemPermission.NOTIFICATION_POLICY_ACCESS)
             if (Settings.System.canWrite(context)) add(SystemPermission.WRITE_SYSTEM_SETTINGS)
+            if (hasRuntime(android.Manifest.permission.ACCESS_WIFI_STATE)) {
+                add(SystemPermission.ACCESS_WIFI_STATE)
+            }
             if (hasRuntime(android.Manifest.permission.ACCESS_FINE_LOCATION)) {
                 add(SystemPermission.ACCESS_FINE_LOCATION)
             }

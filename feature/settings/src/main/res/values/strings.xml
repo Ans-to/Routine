@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_privilege_heading">Privileged Tier Setup (Self-Contained)</string>
+    <string name="settings_status_adb_bridge">Active: Built-in Wireless ADB Bridge (UID %1$d)</string>
+    <string name="settings_status_one_time_grant">Active: Persistent One-Time ADB Grant</string>
+    <string name="settings_status_not_configured">Not Configured: %1$s</string>
+    <string name="settings_recheck_button">Re-check Status</string>
+
+    <string name="settings_opt_b_title">Option B — One-Time ADB Grant (Persists Across Reboots)</string>
+    <string name="settings_opt_b_steps">Run this command once from a computer with USB debugging enabled. No external Android app or background daemon is needed.</string>
+    <string name="settings_copy_command">Copy Command</string>
+    <string name="settings_copied_toast">Copied ADB command to clipboard.</string>
+    <string name="settings_toggle_qr_show">Show Command QR</string>
+    <string name="settings_toggle_qr_hide">Hide Command QR</string>
+
+    <string name="settings_opt_a_title">Option A — Built-in Wireless Debugging Bridge (No PC)</string>
+    <string name="settings_opt_a_steps">1. Open Developer Options and enable Wireless Debugging.\n2. Tap Scan for Pairing Port below, then open Pair device with pairing code.\n3. Enter the 6-digit code in Routine\'s notification or below.</string>
+    <string name="settings_open_dev_options">Open Developer Options</string>
+    <string name="settings_scan_ports_start">Scan for Pairing Port</string>
+    <string name="settings_scan_ports_stop">Stop Port Scan</string>
+    <string name="settings_endpoint_found">Detected pairing port: %1$s:%2$d</string>
+    <string name="settings_endpoint_waiting">Waiting for Wireless Debugging pairing dialog…</string>
+    <string name="settings_send_pair_notification">Post Shade Pairing Prompt</string>
+    <string name="settings_pairing_code_label">6-Digit Pairing Code</string>
+    <string name="settings_pair_now">Pair &amp; Start Internal Shell</string>
+    <string name="settings_auto_reconnect_label">Auto-reconnect Wireless ADB after reboot</string>
+
+    <string name="settings_reliability_heading">Background Reliability</string>
+    <string name="settings_battery_status_exempt">Battery optimization: Unrestricted (Ready)</string>
+    <string name="settings_battery_status_optimized">Battery optimization: Restricted (May delay triggers)</string>
+    <string name="settings_configure_battery">Review Battery Optimization</string>
+    <string name="settings_exact_alarm_ready">Exact alarms: Allowed</string>
+    <string name="settings_exact_alarm_needed">Exact alarms: Needs permission</string>
+    <string name="settings_configure_exact_alarm">Review Exact Alarms</string>
+    <string name="settings_replay_onboarding">Re-open 3-Step Onboarding Guide</string>
+
+    <string name="settings_backup_heading">Encrypted Database Backup &amp; Restore</string>
+    <string name="settings_backup_desc">Export or import schema-versioned rule JSON files locally via the Android system document picker.</string>
+    <string name="settings_export_json">Export Rules (JSON)</string>
+    <string name="settings_import_json">Import Rules (JSON)</string>
+    <string name="settings_export_success">Exported %1$d rule(s) to JSON.</string>
+    <string name="settings_import_success">Imported %1$d rule(s) from backup.</string>
+    <string name="settings_backup_error">Backup operation failed: %1$s</string>
+
+    <string name="settings_appearance_heading">Appearance</string>
+    <string name="settings_dynamic_color_label">Material You Dynamic Color (Android 12+)</string>
+
+    <string name="settings_about_heading">About Routine</string>
+    <string name="settings_about_version">Version 0.1.0-alpha • GPL-3.0</string>
+    <string name="settings_about_privacy">100% local-first. Zero external companion apps, zero cloud sync, zero analytics, and no INTERNET permission in the default build.</string>
+</resources>

@@ -5,12 +5,10 @@
     <string name="channel_alerts_name">Routine Safety Alerts</string>
     <string name="circuit_breaker_title">Rule auto-disabled: %1$s</string>
     <string name="circuit_breaker_body">Disabled after 5 consecutive failures (%1$s).</string>
-    <string name="debug_harness_title">Standard Rule Verification Harness</string>
-    <string name="debug_add_toast_rule">Add Charger Toast Rule</string>
-    <string name="debug_add_ringer_rule">Add Vibrate Rule</string>
-    <string name="debug_fire_now">Fire Live</string>
-    <string name="debug_dry_run">Dry Run</string>
-    <string name="debug_active_rules_heading">Configured Rules (%1$d)</string>
-    <string name="debug_logs_heading">Encrypted Execution Logs (%1$d)</string>
-    <string name="debug_no_logs">No rule executions recorded yet.</string>
+
+    <string name="nav_home">Templates</string>
+    <string name="nav_rules">My Rules</string>
+    <string name="nav_logs">Logs</string>
+    <string name="nav_settings">Settings</string>
+    <string name="snackbar_template_activated">Activated rule: %1$s</string>
 </resources>

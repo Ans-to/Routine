@@ -17,6 +17,7 @@ import app.routine.core.model.Rule
 import app.routine.core.permissions.CapabilityChecker
 import app.routine.core.permissions.DefaultCapabilityChecker
 import app.routine.core.permissions.PermissionStateProvider
+import app.routine.privilege.api.PrivilegeSetupCoordinator
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -33,6 +34,10 @@ object AppEngineModule {
     @Provides
     @Singleton
     fun providePermissionStateProvider(impl: AndroidPermissionStateProvider): PermissionStateProvider = impl
+
+    @Provides
+    @Singleton
+    fun providePrivilegeSetupCoordinator(impl: AndroidPrivilegeSetupCoordinator): PrivilegeSetupCoordinator = impl
 
     @Provides
     @Singleton
