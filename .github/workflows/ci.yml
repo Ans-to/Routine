@@ -26,21 +26,21 @@ jobs:
         run: |
           set -o pipefail
           if ! ./gradlew ktlintCheck --stacktrace 2>&1 | tee /tmp/ktlint.log; then
-            grep -E "\.kt|\.kts|FAILURE|What went wrong|^> " /tmp/ktlint.log | tail -n 30 | while IFS= read -r l; do echo "::error title=ktlint::$l"; done
+            grep -E "\.(kt|kts):[0-9]+|Caused by:|What went wrong" /tmp/ktlint.log | head -n 9 | while IFS= read -r l; do echo "::error title=ktlint::$l"; done
             exit 1
           fi
       - name: Run detekt
         run: |
           set -o pipefail
           if ! ./gradlew detekt --stacktrace 2>&1 | tee /tmp/detekt.log; then
-            grep -E "\.kt|FAILURE|What went wrong|^> | - \[" /tmp/detekt.log | tail -n 30 | while IFS= read -r l; do echo "::error title=detekt::$l"; done
+            grep -E "\.kt:[0-9]+| - \[|Caused by:|What went wrong" /tmp/detekt.log | head -n 9 | while IFS= read -r l; do echo "::error title=detekt::$l"; done
             exit 1
           fi
       - name: Run Android Lint
         run: |
           set -o pipefail
           if ! ./gradlew lintOfflineDebug --stacktrace 2>&1 | tee /tmp/lint.log; then
-            grep -E "Error:|FAILURE|What went wrong|^> " /tmp/lint.log | tail -n 30 | while IFS= read -r l; do echo "::error title=android-lint::$l"; done
+            grep -E "Error:|Caused by:|What went wrong" /tmp/lint.log | head -n 9 | while IFS= read -r l; do echo "::error title=android-lint::$l"; done
             exit 1
           fi
 
