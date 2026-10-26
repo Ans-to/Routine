@@ -16,6 +16,9 @@ import androidx.core.content.ContextCompat
 import app.routine.core.model.SystemPermission
 import app.routine.core.permissions.PermissionSnapshot
 import app.routine.core.permissions.PermissionStateProvider
+import app.routine.privilege.api.AdbBridgeTier
+import app.routine.privilege.api.OneTimeGrantTier
+import app.routine.privilege.api.PrivilegedEngine
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,22 +27,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Queries the Android OS for current runtime, special-access, and privileged grant states.
+ * Queries the Android OS and built-in privilege tiers for current runtime, special-access, and privileged grant states.
  */
 @Singleton
 class AndroidPermissionStateProvider @Inject constructor(
     @ApplicationContext private val context: Context,
+    @AdbBridgeTier private val adbBridgeEngine: PrivilegedEngine,
+    @OneTimeGrantTier private val oneTimeGrantEngine: PrivilegedEngine,
 ) : PermissionStateProvider {
-    private val mutableSnapshot = MutableStateFlow(computeSnapshot())
+    private val mutableSnapshot = MutableStateFlow(computeBaseSnapshot(adbBridgeReady = false, oneTimeReady = false))
     override val snapshotFlow: StateFlow<PermissionSnapshot> = mutableSnapshot.asStateFlow()
 
     override suspend fun refresh(): PermissionSnapshot {
-        val next = computeSnapshot()
+        val bridgeReady = adbBridgeEngine.checkAvailability().isAvailable()
+        val grantReady = oneTimeGrantEngine.checkAvailability().isAvailable()
+        val next = computeBaseSnapshot(adbBridgeReady = bridgeReady, oneTimeReady = grantReady)
         mutableSnapshot.value = next
         return next
     }
 
-    private fun computeSnapshot(): PermissionSnapshot {
+    private fun computeBaseSnapshot(adbBridgeReady: Boolean, oneTimeReady: Boolean): PermissionSnapshot {
         val granted = buildSet {
             if (isPostNotificationsGranted()) add(SystemPermission.POST_NOTIFICATIONS)
             if (isExactAlarmGranted()) add(SystemPermission.SCHEDULE_EXACT_ALARM)
@@ -57,7 +64,8 @@ class AndroidPermissionStateProvider @Inject constructor(
             if (hasRuntime(android.Manifest.permission.SEND_SMS)) add(SystemPermission.SEND_SMS)
             if (isAccessibilityServiceEnabled()) add(SystemPermission.ACCESSIBILITY_SERVICE)
             if (isCallScreeningRoleHeld()) add(SystemPermission.CALL_SCREENING_ROLE)
-            if (hasRuntime("android.permission.WRITE_SECURE_SETTINGS")) {
+            if (adbBridgeReady) add(SystemPermission.ADB_SHELL_BRIDGE)
+            if (oneTimeReady || hasRuntime("android.permission.WRITE_SECURE_SETTINGS")) {
                 add(SystemPermission.WRITE_SECURE_SETTINGS)
             }
         }
@@ -65,7 +73,7 @@ class AndroidPermissionStateProvider @Inject constructor(
         val accessibilityEnabled = SystemPermission.ACCESSIBILITY_SERVICE in granted
         return PermissionSnapshot(
             grantedPermissions = granted,
-            isAdbBridgeReady = false,
+            isAdbBridgeReady = adbBridgeReady,
             isOneTimeGrantReady = secureGranted,
             isAccessibilityEnabled = accessibilityEnabled,
         )

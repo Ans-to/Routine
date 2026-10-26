@@ -15,7 +15,7 @@ android {
     }
 
     buildFeatures {
-        aidl = true
+        aidl = false
     }
 
     compileOptions {
@@ -42,5 +42,6 @@ dependencies {
 
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.test.core)
     testImplementation(libs.robolectric)
 }

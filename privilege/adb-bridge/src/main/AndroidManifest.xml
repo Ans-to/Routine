@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <provider
+            android:name=".binder.RoutineShellBinderProvider"
+            android:authorities="${applicationId}.shellbinder"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
+
+        <receiver
+            android:name=".discovery.PairingCodeSubmissionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="app.routine.privilege.adb.ACTION_SUBMIT_PAIRING_CODE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".AdbBridgeBootReconnectReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
