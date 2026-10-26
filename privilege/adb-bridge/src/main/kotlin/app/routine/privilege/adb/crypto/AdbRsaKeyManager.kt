@@ -39,6 +39,11 @@ class AdbRsaKeyManager(private val storageDir: File) {
         get() = keyPair.public as RSAPublicKey
 
     /**
+     * Returns `true` when Routine has already generated and stored its persistent ADB RSA keypair.
+     */
+    fun hasPersistedIdentity(): Boolean = File(storageDir, "adb_rsa_key.properties").exists()
+
+    /**
      * Formats the exact `RSAPUBLICKEY` / `PeerInfo` payload expected by Android's `adbd`.
      */
     fun buildAdbPublicKeyPayload(comment: String = "routine@localhost"): ByteArray {

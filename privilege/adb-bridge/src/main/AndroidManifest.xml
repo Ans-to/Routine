@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
     <application>
         <provider
             android:name=".binder.RoutineShellBinderProvider"
@@ -9,11 +13,21 @@
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
 
+        <service
+            android:name=".discovery.WirelessAdbPairingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Short-lived user-initiated local Wireless Debugging mDNS pairing listener" />
+        </service>
+
         <receiver
             android:name=".discovery.PairingCodeSubmissionReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="app.routine.privilege.adb.ACTION_SUBMIT_PAIRING_CODE" />
+                <action android:name="app.routine.privilege.adb.ACTION_CANCEL_PAIRING_SCAN" />
             </intent-filter>
         </receiver>
 

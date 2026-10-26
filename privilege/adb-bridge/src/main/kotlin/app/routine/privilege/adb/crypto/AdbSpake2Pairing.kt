@@ -13,12 +13,25 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * Pure-Kotlin implementation of BoringSSL's SPAKE2 over Ed25519 + HKDF-SHA256 + AES-128-GCM
  * used by Android 11+ Wireless Debugging (`_adb-tls-pairing._tcp`).
+ *
+ * Verified bit-for-bit against BoringSSL `spake25519.c` (`edwards25519 point generation seed (M)/(N)`
+ * and cofactor-clearing password scalar construction).
  */
-class AdbSpake2Session(
+class AdbSpake2Session internal constructor(
     val role: Role,
     passwordBytes: ByteArray,
-    random: SecureRandom = SecureRandom(),
+    rawPrivateKey64: ByteArray,
 ) {
+    constructor(
+        role: Role,
+        passwordBytes: ByteArray,
+        random: SecureRandom = SecureRandom(),
+    ) : this(
+        role = role,
+        passwordBytes = passwordBytes,
+        rawPrivateKey64 = ByteArray(64).also { random.nextBytes(it) },
+    )
+
     enum class Role(val idBytes: ByteArray) {
         CLIENT("adb pair client\u0000".encodeToByteArray()),
         SERVER("adb pair server\u0000".encodeToByteArray()),
@@ -30,9 +43,8 @@ class AdbSpake2Session(
     val publicMessage: ByteArray
 
     init {
-        val rawRand = ByteArray(32).also { random.nextBytes(it) }
-        val rawInt = BigInteger(1, rawRand.reversedArray()).mod(Ed25519Math.GROUP_ORDER_L)
-        privateScalar = Ed25519Math.leftShift3(Ed25519Math.toLittleEndian32(rawInt))
+        require(rawPrivateKey64.size == 64) { "SPAKE2 raw private key seed must be 64 bytes." }
+        privateScalar = Ed25519Math.reduce512AndShiftLeft3(rawPrivateKey64)
         passwordScalarBytes = Ed25519Math.computeBoringSslPasswordScalar(passwordHash)
 
         val xBase = Ed25519Math.scalarMultBase(privateScalar)
@@ -42,9 +54,9 @@ class AdbSpake2Session(
     }
 
     /**
-     * Processes the peer's 32-byte SPAKE2 message and derives an authenticated [AdbPairingCipher].
+     * Processes the peer's 32-byte SPAKE2 message and returns the raw 64-byte BoringSSL SPAKE2 shared key.
      */
-    fun processPeerMessage(peerMessage: ByteArray): AdbPairingCipher {
+    internal fun computeSharedKeyMaterial(peerMessage: ByteArray): ByteArray {
         require(peerMessage.size == 32) { "SPAKE2 peer message must be 32 bytes." }
         val peerPoint = Ed25519Math.decodePoint(peerMessage)
         val peerMaskGen = if (role == Role.CLIENT) Ed25519Math.POINT_N else Ed25519Math.POINT_M
@@ -56,7 +68,7 @@ class AdbSpake2Session(
         val clientMsg = if (role == Role.CLIENT) publicMessage else peerMessage
         val serverMsg = if (role == Role.CLIENT) peerMessage else publicMessage
 
-        val transcript = MessageDigest.getInstance("SHA-512").apply {
+        return MessageDigest.getInstance("SHA-512").apply {
             updateLengthPrefixed(Role.CLIENT.idBytes)
             updateLengthPrefixed(Role.SERVER.idBytes)
             updateLengthPrefixed(clientMsg)
@@ -64,7 +76,13 @@ class AdbSpake2Session(
             updateLengthPrefixed(kEncoded)
             updateLengthPrefixed(passwordHash)
         }.digest()
+    }
 
+    /**
+     * Processes the peer's 32-byte SPAKE2 message and derives an authenticated [AdbPairingCipher].
+     */
+    fun processPeerMessage(peerMessage: ByteArray): AdbPairingCipher {
+        val transcript = computeSharedKeyMaterial(peerMessage)
         val aesKey = hkdfSha256(
             ikm = transcript,
             info = HKDF_INFO,
@@ -164,20 +182,28 @@ internal object Ed25519Math {
         ExtPoint(bx, by, BigInteger.ONE, bx.multiply(by).mod(PRIME_P))
     }
 
-    val POINT_M: ExtPoint by lazy { deriveSeedPoint("ed25519 point generation seed (M)".encodeToByteArray()) }
-    val POINT_N: ExtPoint by lazy { deriveSeedPoint("ed25519 point generation seed (N)".encodeToByteArray()) }
+    /**
+     * BoringSSL `spake25519.c` / `draft-ietf-kitten-krb-spake-preauth-01#appendix-B` generator points:
+     * `M = decodePoint(SHA256("edwards25519 point generation seed (M)"))`
+     * `N = decodePoint(SHA256("edwards25519 point generation seed (N)"))`
+     * Note: BoringSSL does NOT multiply M or N by 8; instead, `computeBoringSslPasswordScalar` clears
+     * the low 3 bits of the password scalar by adding multiples of `L`.
+     */
+    val POINT_M: ExtPoint by lazy {
+        deriveSeedPoint("edwards25519 point generation seed (M)".encodeToByteArray())
+    }
+    val POINT_N: ExtPoint by lazy {
+        deriveSeedPoint("edwards25519 point generation seed (N)".encodeToByteArray())
+    }
 
     private fun deriveSeedPoint(seed: ByteArray): ExtPoint {
-        var current = MessageDigest.getInstance("SHA-256").digest(seed)
-        repeat(64) {
-            val candidate = tryDecodePointOrNull(current)
-            if (candidate != null) {
-                // Multiply by cofactor 8 so M and N lie in the prime-order subgroup
-                return doublePoint(doublePoint(doublePoint(candidate)))
-            }
-            current = MessageDigest.getInstance("SHA-256").digest(current)
-        }
-        error("Failed to derive SPAKE2 generator point")
+        val digest = MessageDigest.getInstance("SHA-256").digest(seed)
+        return decodePoint(digest)
+    }
+
+    fun reduce512AndShiftLeft3(raw64Le: ByteArray): ByteArray {
+        val reduced = BigInteger(1, raw64Le.reversedArray()).mod(GROUP_ORDER_L)
+        return leftShift3(toLittleEndian32(reduced))
     }
 
     fun leftShift3(le32: ByteArray): ByteArray {
@@ -192,12 +218,18 @@ internal object Ed25519Math {
     }
 
     fun computeBoringSslPasswordScalar(sha512Digest: ByteArray): ByteArray {
-        val base = BigInteger(1, sha512Digest.reversedArray()).mod(GROUP_ORDER_L)
-        val cofactorMask = BigInteger.valueOf(7)
-        val cleared = (0L..7L)
-            .map { mult -> base.add(GROUP_ORDER_L.multiply(BigInteger.valueOf(mult))) }
-            .first { candidate -> candidate.and(cofactorMask) == BigInteger.ZERO }
-        return toLittleEndian32(cleared)
+        var acc = BigInteger(1, sha512Digest.reversedArray()).mod(GROUP_ORDER_L)
+        var orderMultiple = GROUP_ORDER_L
+        for (bit in 0 until 3) {
+            if (acc.testBit(bit)) {
+                acc = acc.add(orderMultiple)
+            }
+            orderMultiple = orderMultiple.shiftLeft(1)
+        }
+        check(!acc.testBit(0) && !acc.testBit(1) && !acc.testBit(2)) {
+            "BoringSSL SPAKE2 password scalar low 3 bits must be zero."
+        }
+        return toLittleEndian32(acc)
     }
 
     fun toLittleEndian32(value: BigInteger): ByteArray {

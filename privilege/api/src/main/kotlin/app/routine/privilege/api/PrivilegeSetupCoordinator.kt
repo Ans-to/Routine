@@ -1,6 +1,8 @@
 package app.routine.privilege.api
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Discovered local Wireless Debugging port endpoint exposed to UI setup wizards without leaking
@@ -10,6 +12,27 @@ data class PairingEndpointInfo(
     val host: String,
     val port: Int,
     val label: String,
+)
+
+/**
+ * Lifecycle phases of an on-device Option A Wireless Debugging pairing session.
+ */
+enum class WirelessPairingPhase {
+    IDLE,
+    SCANNING,
+    PORT_FOUND,
+    PAIRING,
+    CONNECTED,
+    FAILED,
+}
+
+/**
+ * Snapshot of the background/foreground Wireless Debugging pairing session observed by Settings UI.
+ */
+data class WirelessPairingStatus(
+    val phase: WirelessPairingPhase = WirelessPairingPhase.IDLE,
+    val endpoint: PairingEndpointInfo? = null,
+    val message: String? = null,
 )
 
 /**
@@ -64,6 +87,35 @@ interface PrivilegeSetupCoordinator {
     fun observeWirelessPairingEndpoints(): Flow<PairingEndpointInfo>
 
     /**
+     * Exposes the live [WirelessPairingStatus] state flow maintained across foreground and background transitions.
+     *
+     * Contract: Always holds the latest [WirelessPairingStatus] for Option A setup.
+     * Failure modes: Never throws; defaults to an idle [MutableStateFlow] when unimplemented in tests.
+     * Thread safety: Hot [StateFlow]; completely thread-safe across all dispatchers.
+     */
+    fun observeWirelessPairingStatus(): StateFlow<WirelessPairingStatus> =
+        MutableStateFlow(WirelessPairingStatus())
+
+    /**
+     * Starts the foreground Wireless Debugging scan service so discovery continues while Android Settings is open,
+     * automatically posting a `RemoteInput` notification as soon as a pairing port appears.
+     *
+     * Contract: Launches background-resilient local port discovery and updates [observeWirelessPairingStatus].
+     * Failure modes: Sets status to [WirelessPairingPhase.FAILED] if unsupported or blocked by OS restrictions.
+     * Thread safety: Safe to invoke from any thread.
+     */
+    fun startWirelessPairingScan() = Unit
+
+    /**
+     * Stops any active foreground Wireless Debugging scan service and dismisses transient scan notifications.
+     *
+     * Contract: Cancels active discovery and resets transient scan state to [WirelessPairingPhase.IDLE].
+     * Failure modes: Logs and ignores stop errors if the service is already stopped.
+     * Thread safety: Safe to invoke from any thread.
+     */
+    fun stopWirelessPairingScan() = Unit
+
+    /**
      * Posts the notification-shade `RemoteInput` prompt so the user can enter the 6-digit pairing code
      * without leaving Android's Wireless Debugging screen.
      *
@@ -77,9 +129,19 @@ interface PrivilegeSetupCoordinator {
      * Pairs directly with [host]:[port] using the 6-digit [pairingCode] and launches the internal shell server.
      *
      * Contract: Performs TLS 1.3 + SPAKE2 pairing, connects to the local Wireless Debugging connect port, starts the
-     * Binder shell server, and self-grants `WRITE_SECURE_SETTINGS`.
+     * internal shell server, and self-grants `WRITE_SECURE_SETTINGS`.
      * Failure modes: Returns [PrivilegeOperationResult.Failed] on invalid code, timeout, or handshake failure.
      * Thread safety: Safe to invoke concurrently from any coroutine dispatcher.
      */
     suspend fun pairWirelessAdb(host: String, port: Int, pairingCode: String): PrivilegeOperationResult
+
+    /**
+     * Attempts to connect to an already-paired local Wireless Debugging session without requiring a new pairing code.
+     *
+     * Contract: Discovers an active local connect port and bootstraps the internal shell server if already paired.
+     * Failure modes: Returns [PrivilegeOperationResult.Failed] quickly when unpaired or Wireless Debugging is off.
+     * Thread safety: Safe to invoke concurrently from any coroutine dispatcher.
+     */
+    suspend fun tryConnectPairedWirelessAdb(): PrivilegeOperationResult =
+        PrivilegeOperationResult.Failed("Not paired yet.")
 }
