@@ -1,0 +1,35 @@
+name: Bug Report
+description: Report a reproducible issue in Routine
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear summary of the unexpected behavior.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device & Android Version
+      placeholder: "e.g., Pixel 8, Android 15 (API 35)"
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Privilege Tier
+      options:
+        - Standard APIs Only
+        - Built-in ADB Bridge (Wireless Debugging)
+        - One-Time ADB Grant
+        - Optional Accessibility Service
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted Execution Logs
+      description: Export or copy the relevant redacted entry from Settings -> Log Viewer.

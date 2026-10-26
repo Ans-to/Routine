@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "arena/**"
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run ktlint, detekt, and Android Lint
+        run: ./gradlew ktlintCheck detekt lintOfflineDebug --stacktrace
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run JVM & Robolectric Unit Tests
+        run: ./gradlew testDebugUnitTest :app:testOfflineDebugUnitTest :core:model:test :core:permissions:test :core:engine:test :privilege:api:test --stacktrace
+
+  build:
+    name: Assemble & Policy Gate
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Assemble Debug & Release APKs
+        run: ./gradlew assembleOfflineDebug assembleOfflineRelease --stacktrace
+      - name: Verify Default Build Has No INTERNET Permission
+        run: |
+          MANIFEST="app/build/intermediates/merged_manifest/offlineDebug/processOfflineDebugMainManifest/AndroidManifest.xml"
+          test -f "$MANIFEST"
+          if grep -q "android.permission.INTERNET" "$MANIFEST"; then
+            echo "ERROR: Default offline flavor must NEVER request android.permission.INTERNET"
+            exit 1
+          fi
+          echo "Verified: No INTERNET permission in default offline flavor."
+      - name: Verify Release APK Size Under 15 MB
+        run: |
+          APK=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
+          test -n "$APK"
+          SIZE_BYTES=$(stat -c%s "$APK")
+          echo "Release APK: $APK ($SIZE_BYTES bytes)"
+          if [ "$SIZE_BYTES" -ge 15728640 ]; then
+            echo "ERROR: Release APK exceeds 15 MB ($SIZE_BYTES bytes)"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: routine-apks
+          path: app/build/outputs/apk/**/*.apk

@@ -1,0 +1,22 @@
+name: Template or Feature Proposal
+description: Propose a new self-contained recipe or rule builder enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Proposal Summary
+      description: Describe the automation recipe or UX improvement.
+    validations:
+      required: true
+  - type: dropdown
+    id: required_tier
+    attributes:
+      label: Required Privilege Tier
+      options:
+        - Standard Tier (Normal runtime permissions)
+        - Optional Accessibility Tier (Deterministic static rule)
+        - Privileged Tier (ADB Bridge / One-Time Grant)
+    validations:
+      required: true

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Routine</string>
+    <string name="app_tagline">Automations for people who don\'t want to learn Tasker.</string>
+</resources>

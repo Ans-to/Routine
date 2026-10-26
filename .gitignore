@@ -1,0 +1,25 @@
+# Gradle & build outputs
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystores & signing secrets (never commit private keys)
+*.jks
+*.keystore
+signing.properties
+
+# OS / temporary files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp

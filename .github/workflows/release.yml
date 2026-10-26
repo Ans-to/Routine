@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build Reproducible Signed APK & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Generate Ephemeral Release Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore /tmp/routine-release.jks \
+            -storetype PKCS12 \
+            -alias routine \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass routine-alpha \
+            -keypass routine-alpha \
+            -dname "CN=Routine Open Source, OU=Android, O=Routine, L=OpenSource, ST=Global, C=US"
+      - name: Build Signed Release APKs
+        env:
+          SIGNING_STORE_FILE: /tmp/routine-release.jks
+        run: ./gradlew assembleOfflineRelease assembleWirelessAdbRelease --stacktrace
+      - name: Reproducible Build Determinism Check
+        env:
+          SIGNING_STORE_FILE: /tmp/routine-release.jks
+        run: |
+          APK_FIRST=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
+          SHA_FIRST=$(sha256sum "$APK_FIRST" | awk '{print $1}')
+          ./gradlew clean assembleOfflineRelease --stacktrace
+          APK_SECOND=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
+          SHA_SECOND=$(sha256sum "$APK_SECOND" | awk '{print $1}')
+          echo "First SHA256:  $SHA_FIRST"
+          echo "Second SHA256: $SHA_SECOND"
+          test "$SHA_FIRST" = "$SHA_SECOND"
+      - name: Verify APK Under 15 MB
+        run: |
+          APK=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
+          SIZE_BYTES=$(stat -c%s "$APK")
+          test "$SIZE_BYTES" -lt 15728640
+          cp "$APK" "Routine-${GITHUB_REF_NAME}-offline.apk"
+          WIRELESS_APK=$(find app/build/outputs/apk/wirelessAdb/release -name "*.apk" | head -n 1)
+          cp "$WIRELESS_APK" "Routine-${GITHUB_REF_NAME}-wirelessAdb.apk"
+          sha256sum Routine-${GITHUB_REF_NAME}-*.apk > SHA256SUMS.txt
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" Routine-${GITHUB_REF_NAME}-*.apk SHA256SUMS.txt --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              Routine-${GITHUB_REF_NAME}-*.apk SHA256SUMS.txt \
+              --title "Routine ${GITHUB_REF_NAME}" \
+              --generate-notes \
+              --prerelease
+          fi
