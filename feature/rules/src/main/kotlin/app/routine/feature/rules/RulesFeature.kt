@@ -212,10 +212,11 @@ private fun RuleItemCard(
                     modifier = Modifier.testTag("rule_toggle_${rule.id}"),
                 )
             }
-            val lastTriggeredLabel = if (rule.lastTriggeredEpochMs != null) {
+            val lastTriggered = rule.lastTriggeredEpochMs
+            val lastTriggeredLabel = if (lastTriggered != null) {
                 stringResource(
                     R.string.my_rules_last_triggered_fmt,
-                    RuleSummaryFormatter.formatTimestamp(rule.lastTriggeredEpochMs!!),
+                    RuleSummaryFormatter.formatTimestamp(lastTriggered),
                 )
             } else {
                 stringResource(R.string.my_rules_last_triggered_never)

@@ -236,8 +236,9 @@ fun TemplatesGridContent(
             onDismiss = { pendingPermission = null },
             onConfirmProceed = { spec ->
                 pendingPermission = null
-                if (spec.runtimeManifestPermission != null) {
-                    onRequestRuntimePermission(spec.runtimeManifestPermission)
+                val runtimePerm = spec.runtimeManifestPermission
+                if (runtimePerm != null) {
+                    onRequestRuntimePermission(runtimePerm)
                 } else {
                     runCatching {
                         context.startActivity(PermissionPromptCatalog.buildSettingsIntent(context, perm))
