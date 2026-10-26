@@ -135,14 +135,36 @@ jobs:
             exit 1
           fi
           echo "### Reproducible APK Verified: \`$SHA_FIRST\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish v0.1.0-alpha Signed Release Artifacts
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v0.1.0-alpha"
+          OFFLINE_APK=$(find app/build/outputs/apk/offline/release -name "*.apk" | head -n 1)
+          WIRELESS_APK=$(find app/build/outputs/apk/wirelessAdb/release -name "*.apk" | head -n 1)
+          cp "$OFFLINE_APK" "Routine-${TAG}-offline.apk"
+          cp "$WIRELESS_APK" "Routine-${TAG}-wirelessAdb.apk"
+          sha256sum Routine-${TAG}-*.apk > SHA256SUMS.txt
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Routine-${TAG}-*.apk SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" \
+              Routine-${TAG}-*.apk SHA256SUMS.txt \
+              --target "${GITHUB_SHA}" \
+              --title "Routine ${TAG}" \
+              --notes-file fastlane/metadata/android/en-US/changelogs/1.txt \
+              --prerelease
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: routine-apks
           path: app/build/outputs/apk/*/release/*.apk
 
   emulator-release-smoke:
-    name: Release APK Emulator Smoke & Publish
+    name: Release APK Emulator Smoke Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [lint, test, build]
     steps:
       - uses: actions/checkout@v4
@@ -157,9 +179,7 @@ jobs:
       - name: Enable KVM for hardware-accelerated x86_64 emulator
         run: |
           if [ -e /dev/kvm ]; then
-            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-            sudo udevadm control --reload-rules
-            sudo udevadm trigger --name-match=kvm
+            sudo chmod 666 /dev/kvm
           else
             echo "::warning title=kvm::/dev/kvm not available on runner"
           fi
@@ -169,49 +189,40 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          cleanup() {
+            adb emu kill >/dev/null 2>&1 || true
+            [ -n "${EMU_PID:-}" ] && kill "$EMU_PID" >/dev/null 2>&1 || true
+            adb kill-server >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           if ! "$SDKMANAGER" --install "platform-tools" "emulator" "platforms;android-34" "system-images;android-34;google_apis;x86_64" >/tmp/sdk.log 2>&1; then
             tail -n 10 /tmp/sdk.log | while IFS= read -r l; do echo "::error title=sdkmanager::$l"; done
             exit 1
           fi
           echo "no" | "$AVDMANAGER" create avd -n routine_smoke -k "system-images;android-34;google_apis;x86_64" --device "pixel_6" --force
-          nohup "$ANDROID_HOME/emulator/emulator" -avd routine_smoke -no-window -gpu swiftshader_indirect -no-snapshot -no-audio -no-boot-anim >/tmp/emulator.log 2>&1 &
+          adb start-server >/dev/null 2>&1 || true
+          "$ANDROID_HOME/emulator/emulator" -avd routine_smoke -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim </dev/null >/tmp/emulator.log 2>&1 &
           EMU_PID=$!
-          adb wait-for-device
+          BOOT_OK=0
           for i in $(seq 1 120); do
-            BOOTED=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
-            if [ "$BOOTED" = "1" ]; then
-              break
-            fi
             if ! kill -0 "$EMU_PID" 2>/dev/null; then
               tail -n 15 /tmp/emulator.log | while IFS= read -r l; do echo "::error title=emulator-boot::$l"; done
               exit 1
             fi
+            BOOTED=$(timeout 5 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            if [ "$BOOTED" = "1" ]; then
+              BOOT_OK=1
+              break
+            fi
             sleep 2
           done
+          if [ "$BOOT_OK" != "1" ]; then
+            tail -n 15 /tmp/emulator.log | while IFS= read -r l; do echo "::error title=emulator-timeout::$l"; done
+            exit 1
+          fi
           sleep 5
           OFFLINE_APK=$(find dist-apks -name "*offline*release*.apk" | head -n 1)
           python3 scripts/emulator_release_smoke.py "$OFFLINE_APK"
-          adb emu kill || kill "$EMU_PID" || true
-      - name: Publish Emulator-Verified v0.1.0-alpha Signed Release Artifacts
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="v0.1.0-alpha"
-          OFFLINE_APK=$(find dist-apks -name "*offline*release*.apk" | head -n 1)
-          WIRELESS_APK=$(find dist-apks -name "*wirelessAdb*release*.apk" | head -n 1)
-          cp "$OFFLINE_APK" "Routine-${TAG}-offline.apk"
-          cp "$WIRELESS_APK" "Routine-${TAG}-wirelessAdb.apk"
-          sha256sum Routine-${TAG}-*.apk > SHA256SUMS.txt
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Routine-${TAG}-*.apk SHA256SUMS.txt --clobber
-          else
-            gh release create "$TAG" \
-              Routine-${TAG}-*.apk SHA256SUMS.txt \
-              --target "${GITHUB_SHA}" \
-              --title "Routine ${TAG}" \
-              --notes-file fastlane/metadata/android/en-US/changelogs/1.txt \
-              --prerelease
-          fi
+
 
