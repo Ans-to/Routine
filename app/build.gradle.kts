@@ -66,10 +66,10 @@ android {
                 "proguard-rules.pro",
             )
             val customSigning = signingConfigs.getByName("alphaRelease")
-            signingConfig = if (customSigning.storeFile != null) {
-                customSigning
+            if (customSigning.storeFile != null) {
+                signingConfig = customSigning
             } else {
-                signingConfigs.getByName("debug")
+                signingConfig = signingConfigs.getByName("debug")
             }
         }
     }
@@ -92,11 +92,7 @@ android {
         abortOnError = true
         warningsAsErrors = false
         checkReleaseBuilds = true
-        disable += setOf(
-            "GradleDependency",
-            "AndroidGradlePluginVersion",
-            "NewerVersionAvailable",
-        )
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable")
     }
 
     packaging {

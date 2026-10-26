@@ -23,6 +23,7 @@ subprojects {
     }
 
     extensions.configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+        version.set("1.4.1")
         android.set(true)
         ignoreFailures.set(false)
         filter {
