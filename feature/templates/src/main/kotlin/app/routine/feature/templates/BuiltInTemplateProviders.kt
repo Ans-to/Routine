@@ -24,7 +24,7 @@ interface TemplateProvider {
     fun provide(context: Context): Template
 }
 
-private class StaticTemplateProvider(
+internal class StaticTemplateProvider(
     override val order: Int,
     private val id: String,
     @StringRes private val titleRes: Int,
@@ -59,10 +59,12 @@ private class StaticTemplateProvider(
 }
 
 /**
- * Registry of all 20 built-in self-contained [TemplateProvider] definitions.
+ * Registry of all 40 built-in self-contained [TemplateProvider] definitions.
  */
 object BuiltInTemplateCatalog {
-    fun allProviders(): Set<TemplateProvider> =
+    fun allProviders(): Set<TemplateProvider> = coreProviders() + ResearchedTemplateCatalog.providers()
+
+    internal fun coreProviders(): Set<TemplateProvider> =
         providersOneToSeven() + providersEightToFourteen() + providersFifteenToTwenty()
 
     private fun providersOneToSeven(): Set<TemplateProvider> = setOf(
@@ -356,5 +358,5 @@ object BuiltInTemplateCatalog {
 object BuiltInTemplatesModule {
     @Provides
     @ElementsIntoSet
-    fun provideBuiltInTemplates(): Set<TemplateProvider> = BuiltInTemplateCatalog.allProviders()
+    fun provideBuiltInTemplates(): Set<TemplateProvider> = BuiltInTemplateCatalog.coreProviders()
 }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="templates_screen_title">Templates</string>
-    <string name="templates_search_placeholder">Search 20 built-in automations…</string>
+    <string name="templates_search_placeholder">Search built-in automations…</string>
     <string name="templates_filter_all">All</string>
     <string name="templates_filter_ready">Ready</string>
     <string name="templates_filter_setup">Needs Setup</string>
@@ -58,4 +58,45 @@
     <string name="tpl_19_desc">Silences incoming calls from numbers not in your contacts.</string>
     <string name="tpl_20_title">Alarm dismissed briefing</string>
     <string name="tpl_20_desc">Posts a morning summary notification right after dismissing your alarm.</string>
+
+    <string name="tpl_21_title">Morning unplug reset</string>
+    <string name="tpl_21_desc">Turns off DND, restores Normal ringer, and sets 65% brightness on unplug.</string>
+    <string name="tpl_22_title">Wi-Fi on in the morning</string>
+    <string name="tpl_22_desc">Re-enables Wi-Fi automatically at 07:00 before your day begins.</string>
+    <string name="tpl_23_title">Night Light off at sunrise</string>
+    <string name="tpl_23_desc">Turns off Night Light warm filter every morning at 07:00.</string>
+    <string name="tpl_24_title">Restore ringer leaving venue</string>
+    <string name="tpl_24_desc">Disables DND and restores Normal ringer when exiting a quiet venue.</string>
+    <string name="tpl_25_title">Vibrate on office Wi-Fi</string>
+    <string name="tpl_25_desc">Switches ringer to Vibrate automatically when joining OfficeWiFi.</string>
+    <string name="tpl_26_title">Unwind leaving office Wi-Fi</string>
+    <string name="tpl_26_desc">Turns off DND and restores Normal ringer when disconnecting from OfficeWiFi.</string>
+    <string name="tpl_27_title">Arrive home comfort mode</string>
+    <string name="tpl_27_desc">Disables DND, restores Normal ringer, and unlocks rotation on HomeWiFi.</string>
+    <string name="tpl_28_title">Car navigation cockpit</string>
+    <string name="tpl_28_desc">Sets 85% brightness, unlocks rotation, and opens maps on car Bluetooth.</string>
+    <string name="tpl_29_title">Encrypted DNS leaving home</string>
+    <string name="tpl_29_desc">Enables Private DNS hostname mode when disconnecting from HomeWiFi.</string>
+    <string name="tpl_30_title">Local DNS on home Wi-Fi</string>
+    <string name="tpl_30_desc">Switches Private DNS to opportunistic on HomeWiFi for local LAN resolvers.</string>
+    <string name="tpl_31_title">Lock USB debugging on plug-in</string>
+    <string name="tpl_31_desc">Disables USB debugging when power connects to guard public charging ports.</string>
+    <string name="tpl_32_title">Post-reboot check-in</string>
+    <string name="tpl_32_desc">Posts a local confirmation once scheduled automations re-arm after reboot.</string>
+    <string name="tpl_33_title">Grayscale on social apps</string>
+    <string name="tpl_33_desc">Switches screen to monochrome grayscale when opening social video feeds.</string>
+    <string name="tpl_34_title">Full color in the morning</string>
+    <string name="tpl_34_desc">Disables display grayscale filter every morning at 07:00.</string>
+    <string name="tpl_35_title">System dark theme at night</string>
+    <string name="tpl_35_desc">Activates Android system dark theme at 20:00 without location access.</string>
+    <string name="tpl_36_title">System light theme in morning</string>
+    <string name="tpl_36_desc">Restores Android system light theme every morning at 07:00.</string>
+    <string name="tpl_37_title">E-book reading focus</string>
+    <string name="tpl_37_desc">Enables DND, locks portrait rotation, and sets 35% brightness in e-readers.</string>
+    <string name="tpl_38_title">Camera outdoor boost</string>
+    <string name="tpl_38_desc">Boosts brightness to 90% and unlocks rotation when opening your camera.</string>
+    <string name="tpl_39_title">Critical 10% battery survival</string>
+    <string name="tpl_39_desc">Dims screen, sets Vibrate ringer, and opens Battery Saver below 10%.</string>
+    <string name="tpl_40_title">Wake-up music after alarm</string>
+    <string name="tpl_40_desc">Launches your music player automatically right after dismissing an alarm.</string>
 </resources>
