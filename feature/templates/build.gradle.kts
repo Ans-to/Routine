@@ -37,6 +37,8 @@ dependencies {
     api(project(":core:model"))
     implementation(project(":core:permissions"))
     implementation(project(":core:data"))
+    implementation(project(":trigger:standard"))
+    implementation(project(":feature:onboarding"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
@@ -52,6 +54,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.robolectric)
 }

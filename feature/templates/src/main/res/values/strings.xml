@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="templates_screen_title">Templates</string>
+    <string name="templates_search_placeholder">Search 20 built-in automations…</string>
+    <string name="templates_filter_all">All</string>
+    <string name="templates_filter_ready">Ready</string>
+    <string name="templates_filter_setup">Needs Setup</string>
+    <string name="templates_filter_privileged">Privileged</string>
+
+    <string name="badge_ready">Ready</string>
+    <string name="badge_needs_setup">Needs Setup</string>
+    <string name="badge_privileged">Privileged</string>
+
+    <string name="template_sheet_activate">Activate Rule</string>
+    <string name="template_sheet_grant_first">Review Required Permission</string>
+    <string name="template_sheet_open_privilege_setup">Open Privileged Tier Setup</string>
+    <string name="template_sheet_rule_name_label">Rule Name</string>
+    <string name="template_sheet_cancel">Cancel</string>
+    <string name="template_activated_snackbar">Activated \"%1$s\"</string>
+
+    <string name="tpl_01_title">Wi-Fi off at bedtime</string>
+    <string name="tpl_01_desc">Turns off Wi-Fi automatically at 23:00 every night.</string>
+    <string name="tpl_02_title">DND during meetings</string>
+    <string name="tpl_02_desc">Enables Do Not Disturb while a busy calendar meeting is active.</string>
+    <string name="tpl_03_title">Driving SMS auto-reply</string>
+    <string name="tpl_03_desc">Prepares a safe driving auto-reply when car Bluetooth connects.</string>
+    <string name="tpl_04_title">Monthly data cap alert</string>
+    <string name="tpl_04_desc">Notifies you when monthly mobile data exceeds 5,000 MB.</string>
+    <string name="tpl_05_title">Battery saver below 20%</string>
+    <string name="tpl_05_desc">Prompts Battery Saver when battery drops below 20%.</string>
+    <string name="tpl_06_title">Bedtime wind-down</string>
+    <string name="tpl_06_desc">Enables Do Not Disturb and lowers brightness to 15% at 22:30.</string>
+    <string name="tpl_07_title">Unplug at 80% charge</string>
+    <string name="tpl_07_desc">Reminds you to unplug when battery reaches 80% while charging.</string>
+    <string name="tpl_08_title">Open app on work Wi-Fi</string>
+    <string name="tpl_08_desc">Launches your workspace browser when joining OfficeWiFi.</string>
+    <string name="tpl_09_title">Silence at quiet venue</string>
+    <string name="tpl_09_desc">Switches ringer to Silent when arriving at cinema, mosque, or church.</string>
+    <string name="tpl_10_title">Morning briefing</string>
+    <string name="tpl_10_desc">At 07:30 on charger, opens news and posts your morning briefing.</string>
+    <string name="tpl_11_title">Lock rotation for video</string>
+    <string name="tpl_11_desc">Locks screen rotation when opening VLC or YouTube.</string>
+    <string name="tpl_12_title">Night Light at sunset</string>
+    <string name="tpl_12_desc">Activates Night Light blue-light filter every evening at 19:00.</string>
+    <string name="tpl_13_title">Auto-disable hotspot (30m)</string>
+    <string name="tpl_13_desc">Turns off Wi-Fi hotspot after 30 minutes to save battery.</string>
+    <string name="tpl_14_title">Low storage alert</string>
+    <string name="tpl_14_desc">Alerts you when free internal storage drops below 10%.</string>
+    <string name="tpl_15_title">Music on headphones</string>
+    <string name="tpl_15_desc">Opens your music player as soon as Bluetooth headphones connect.</string>
+    <string name="tpl_16_title">Wi-Fi off leaving home</string>
+    <string name="tpl_16_desc">Disables Wi-Fi automatically when disconnecting from HomeWiFi.</string>
+    <string name="tpl_17_title">Shorten screen timeout</string>
+    <string name="tpl_17_desc">Sets screen timeout to 15s when opening distraction-heavy apps.</string>
+    <string name="tpl_18_title">Weekly photo backup</string>
+    <string name="tpl_18_desc">Reminds you every Sunday at 18:00 to back up your camera roll.</string>
+    <string name="tpl_19_title">Silence unknown callers</string>
+    <string name="tpl_19_desc">Silences incoming calls from numbers not in your contacts.</string>
+    <string name="tpl_20_title">Alarm dismissed briefing</string>
+    <string name="tpl_20_desc">Posts a morning summary notification right after dismissing your alarm.</string>
+</resources>
