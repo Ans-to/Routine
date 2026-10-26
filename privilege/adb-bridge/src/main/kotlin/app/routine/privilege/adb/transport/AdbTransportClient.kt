@@ -229,6 +229,7 @@ class AdbTransportClient(private val keyManager: AdbRsaKeyManager) {
         }
     }
 
+    @Suppress("CustomX509TrustManager")
     private fun buildAdbSslContext(): SSLContext {
         val km = object : X509ExtendedKeyManager() {
             override fun chooseClientAlias(
@@ -250,7 +251,7 @@ class AdbTransportClient(private val keyManager: AdbRsaKeyManager) {
 
             override fun getPrivateKey(alias: String?): PrivateKey = keyManager.privateKey
         }
-        val tm = @Suppress("CustomX509TrustManager") object : X509TrustManager {
+        val tm = object : X509TrustManager {
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
             override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
             override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
